@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 110" role="img" aria-labelledby="title">
+  <title id="title">Sniff — a sniffing dog</title>
+  <g fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 58 C43 25 88 29 103 51 C107 61 107 72 112 76 C88 82 61 82 45 78 C40 75 38 65 40 58Z"/>
+    <path d="M42 49 L27 34 L22 22 M49 77 L45 95 L57 95 M88 80 L91 95 L104 95"/>
+    <path d="M100 49 C107 33 124 33 129 45 L135 60 L151 68 Q156 82 143 83 Q123 86 112 75"/>
+  </g>
+  <g fill="currentColor">
+    <path d="M111 45 C90 40 86 73 103 79 C119 85 119 60 115 51Z"/>
+    <ellipse cx="151" cy="71" rx="8" ry="6"/>
+    <circle cx="126.25" cy="54.25" r="2.25"/>
+  </g>
+</svg>
