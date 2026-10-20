@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 import SniffIdentity
 
@@ -8,22 +9,62 @@ import SniffIdentity
     let start = DogMotion.pose(at: 0)
     let end = DogMotion.pose(at: DogMotion.duration)
     let after = DogMotion.pose(at: step)
-    #expect(abs(start.headAngle - end.headAngle) < 0.000001)
-    #expect(abs(start.tailAngle - end.tailAngle) < 0.000001)
-    #expect(abs(start.earAngle - end.earAngle) < 0.000001)
-    let enteringVelocity = (start.tailAngle - before.tailAngle) / step
-    let leavingVelocity = (after.tailAngle - start.tailAngle) / step
-    #expect(abs(enteringVelocity - leavingVelocity) < 0.001)
+    let channels: [KeyPath<DogPose, Double>] = [\.headAngle, \.tailAngle, \.earAngle, \.rumpSway, \.rumpLift, \.headTurn, \.scentOpacity]
+    for channel in channels {
+        #expect(abs(start[keyPath: channel] - end[keyPath: channel]) < 0.000001)
+        let enteringVelocity = (start[keyPath: channel] - before[keyPath: channel]) / step
+        let leavingVelocity = (after[keyPath: channel] - start[keyPath: channel]) / step
+        #expect(abs(enteringVelocity - leavingVelocity) < 0.001)
+    }
 }
 
 @Test func motionStaysSmallAndReducedMotionRemainsStill() {
     for frame in 0..<240 {
         let time = Double(frame) / 60
         let pose = DogMotion.pose(at: time)
-        #expect(abs(pose.headAngle) <= 0.071)
-        #expect(abs(pose.tailAngle) <= 0.221)
-        #expect(abs(pose.earAngle) <= 0.019)
+        #expect(pose.headAngle >= -0.084 && pose.headAngle <= 0)
+        #expect(abs(pose.tailAngle) <= 0.301)
+        #expect(abs(pose.earAngle) <= 0.051)
+        #expect(abs(pose.rumpSway) <= 2.601 && abs(pose.rumpLift) <= 0.651)
+        #expect(abs(pose.headTurn) <= 1)
         let still = DogMotion.pose(at: time, amount: 0)
         #expect(still.headAngle == 0 && still.tailAngle == 0 && still.earAngle == 0 && still.scentOpacity == 0)
+        #expect(still.rumpSway == 0 && still.rumpLift == 0 && still.headTurn == 0)
+    }
+}
+
+@Test func artworkFitsEveryFrameWithEvenInkAndPlantedPaws() {
+    for compact in [false, true] {
+        let width = compact ? 60 : 180, height = compact ? 36 : 110
+        var plantedPaws: [UInt8]?
+        for frame in 0..<120 {
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            pixels.withUnsafeMutableBytes { bytes in
+                let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                        bitsPerComponent: 8, bytesPerRow: width * 4,
+                                        space: CGColorSpaceCreateDeviceRGB(),
+                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+                DogDrawing.draw(in: context, size: CGSize(width: width, height: height),
+                                pose: DogMotion.pose(at: Double(frame) / 30),
+                                ink: CGColor(gray: 0, alpha: 0.5), lineWidth: compact ? 4.7 : 2.65, compact: compact)
+            }
+            let alpha = stride(from: 3, to: pixels.count, by: 4).map { pixels[$0] }
+            #expect(alpha.max()! <= 128)
+            #expect(alpha.contains { $0 > 100 })
+            if !compact {
+                var pawPixels: [UInt8] = []
+                for (xs, ys) in [(22..<33, 80..<87), (43..<54, 80..<85), (103..<116, 80..<86)] {
+                    for y in ys { for x in xs { pawPixels.append(alpha[(height - 1 - y) * width + x]) } }
+                }
+                if let plantedPaws { #expect(pawPixels == plantedPaws) }
+                else { plantedPaws = pawPixels }
+            }
+            for x in 0..<width {
+                #expect(alpha[x] == 0 && alpha[(height - 1) * width + x] == 0)
+            }
+            for y in 0..<height {
+                #expect(alpha[y * width] == 0 && alpha[y * width + width - 1] == 0)
+            }
+        }
     }
 }

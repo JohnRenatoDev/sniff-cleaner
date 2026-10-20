@@ -43,7 +43,7 @@ sniff clean --plan ./cleanup-plan.json
 
 The app, CLI and installer support English, Portuguese and Spanish. Choose a language in Settings → General → Language. App text changes immediately; some macOS menu actions need an app restart.
 
-The dog in the menu bar sniffs and wags its tail during a scan or cleanup. It stays still when idle. The installer uses the same artwork, and Reduce Motion keeps the dog still.
+Sniff's mascot is a hand-drawn dachshund, with a long body, short legs and a drooping ear. In the menu bar, it sniffs and wags its tail during a scan or cleanup. Its hips sway with the wag, and its head sweeps from side to side as it sniffs. It stays still when idle. The installer uses the same artwork, and Reduce Motion keeps the dog still.
 
 <img src="Resources/mascot-preview.gif" width="360" alt="Sniff sniffing and wagging its tail">
 

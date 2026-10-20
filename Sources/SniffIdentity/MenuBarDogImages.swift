@@ -13,7 +13,7 @@ public enum MenuBarDogImages {
         let pose = phase.map { DogMotion.pose(at: $0 / (.pi * 2) * DogMotion.duration) } ?? .resting
         let image = NSImage(size: size, flipped: true) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            DogDrawing.draw(in: context, size: rect.size, pose: pose, ink: NSColor.black.cgColor, lineWidth: 6.7, compact: true)
+            DogDrawing.draw(in: context, size: rect.size, pose: pose, ink: NSColor.black.cgColor, lineWidth: 4.7, compact: true)
             return true
         }
         image.isTemplate = true

@@ -1,4 +1,4 @@
-Sniff 0.3.1 preview. Requires macOS 14 or later.
+Sniff 0.3.2 preview. Requires macOS 14 or later.
 
 1. Open Install Sniff.app from this disk image.
 2. Choose English, Portuguese or Spanish.
