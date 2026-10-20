@@ -5,7 +5,7 @@ import Foundation
 public enum DogDrawing {
     public static func draw(in context: CGContext, size: CGSize, pose: DogPose = .resting,
                             ink: CGColor, lineWidth: CGFloat = 2.65, compact: Bool = false) {
-        let bounds = compact ? CGRect(x: 0, y: 4, width: 174, height: 94) : CGRect(x: 0, y: 0, width: 180, height: 110)
+        let bounds = compact ? CGRect(x: -4, y: 0, width: 182, height: 100) : CGRect(x: 0, y: 0, width: 180, height: 110)
         let scale = min(size.width / bounds.width, size.height / bounds.height)
         context.saveGState()
         context.translateBy(x: (size.width - bounds.width * scale) / 2, y: (size.height - bounds.height * scale) / 2)
@@ -40,10 +40,15 @@ public enum DogDrawing {
         context.saveGState()
         context.translateBy(x: hipX, y: hipY)
         rotate(pose.tailAngle, around: CGPoint(x: 39, y: 43))
+        func tailPoint(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            let weight = pow(max(0, (43 - y) / 26), 2)
+            return CGPoint(x: x + CGFloat(pose.tailBend) * weight,
+                           y: y + CGFloat(abs(pose.tailBend)) * weight * 0.1)
+        }
         stroke {
-            move(40, 41)
-            curve(27, 42, 17, 28, 20, 17)
-            curve(10, 25, 15, 44, 38, 45)
+            context.move(to: tailPoint(40, 41))
+            context.addCurve(to: tailPoint(20, 17), control1: tailPoint(27, 42), control2: tailPoint(17, 28))
+            context.addCurve(to: tailPoint(38, 45), control1: tailPoint(10, 25), control2: tailPoint(15, 44))
         }
         context.restoreGState()
 
@@ -127,7 +132,21 @@ public enum DogDrawing {
         }
         context.restoreGState()
         context.fillEllipse(in: CGRect(x: 156.5, y: 78.4, width: 7.5, height: 6.5))
-        context.fillEllipse(in: CGRect(x: 142.9 + CGFloat(pose.headTurn) * 0.75, y: 66.15, width: 4.2, height: 4.2))
+        let eyeX = 142.9 + CGFloat(pose.headTurn) * 0.75 + CGFloat(pose.eyeLook) * 0.9
+        let eyeHeight = CGFloat(max(0, min(1, pose.eyeOpen))) * 4.2
+        if eyeHeight > 1 {
+            context.fillEllipse(in: CGRect(x: eyeX, y: 68.25 - eyeHeight / 2, width: 4.2, height: eyeHeight))
+        } else {
+            context.saveGState(); context.setLineWidth(1.5)
+            stroke { move(eyeX - 0.2, 68.25); curve(eyeX + 1, 68.8, eyeX + 3.2, 68.8, eyeX + 4.4, 68.25) }
+            context.restoreGState()
+        }
+        if !compact, pose.curiosity > 0 {
+            context.saveGState(); context.setAlpha(pose.curiosity * 0.8); context.setLineWidth(1.1)
+            let lift = CGFloat(pose.curiosity) * 0.8
+            stroke { move(eyeX - 1, 63.5 - lift); curve(eyeX + 1, 61.9 - lift, eyeX + 3.5, 62.1 - lift, eyeX + 5, 63.2 - lift) }
+            context.restoreGState()
+        }
         context.restoreGState()
 
         if !compact, pose.scentOpacity > 0 {

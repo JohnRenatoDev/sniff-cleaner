@@ -52,7 +52,7 @@ def bundle(path, executable, identifier, display_name):
     info = {
         'CFBundleExecutable': executable, 'CFBundleIdentifier': identifier, 'CFBundleName': display_name,
         'CFBundleDisplayName': display_name, 'CFBundlePackageType': 'APPL',
-        'CFBundleShortVersionString': version, 'CFBundleVersion': '6', 'CFBundleIconFile': 'Sniff',
+        'CFBundleShortVersionString': version, 'CFBundleVersion': '7', 'CFBundleIconFile': 'Sniff',
         'CFBundleDevelopmentRegion': 'en', 'CFBundleLocalizations': ['en', 'pt', 'es'],
         'LSMinimumSystemVersion': '14.0', 'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': True, 'NSSupportsAutomaticTermination': False,
