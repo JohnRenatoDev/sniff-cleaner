@@ -27,7 +27,7 @@ Source code, agent sessions, settings, credentials, databases, container volumes
 
 ## Install
 
-Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG and drag **Sniff** to **Applications**. Eject the disk image, then open Sniff from Applications.
+Download the latest [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG and drag **Sniff** to **Applications**. Eject the disk image, then open Sniff from Applications.
 
 ![Drag Sniff to Applications](Resources/dmg-preview.png)
 
