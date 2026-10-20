@@ -1,6 +1,6 @@
 # Sniff
 
-A native macOS app for cleaning up after AI-assisted development.
+A native macOS app for cleaning up after AI-assisted development. Licensed under [MIT](LICENSE).
 
 Sniff was built to automate the routine cleanup that comes with working with AI coding agents. Repeated package installs, temporary runtimes and build output can leave a lot behind. Keeping track of it all shouldn't become another job for you or your agent harness.
 
@@ -109,3 +109,9 @@ The script builds the Swift package, packages a locally signed app and opens it.
 Removal tests use isolated temporary fixtures. The scheduler test creates a temporary LaunchAgent, verifies that macOS starts it and removes the job afterward. It does not clean user data.
 
 Build universal release files with `./script/build_release.sh`. The [release instructions](docs/releases.md) cover DMG and CLI packaging, artifact validation, Developer ID signing and notarization.
+
+## License
+
+Sniff is licensed under the [MIT License](LICENSE).
+
+🇧🇷 #BrazilianEngineer
