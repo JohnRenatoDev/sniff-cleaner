@@ -12,7 +12,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--bin-dir', type=Path, required=True)
 parser.add_argument('--output-dir', type=Path, required=True)
 parser.add_argument('--identity', default='-')
-parser.add_argument('--installer', action='store_true')
 args = parser.parse_args()
 binary = args.bin_dir.resolve()
 output = args.output_dir.resolve()
@@ -52,7 +51,7 @@ def bundle(path, executable, identifier, display_name):
     info = {
         'CFBundleExecutable': executable, 'CFBundleIdentifier': identifier, 'CFBundleName': display_name,
         'CFBundleDisplayName': display_name, 'CFBundlePackageType': 'APPL',
-        'CFBundleShortVersionString': version, 'CFBundleVersion': '7', 'CFBundleIconFile': 'Sniff',
+        'CFBundleShortVersionString': version, 'CFBundleVersion': '8', 'CFBundleIconFile': 'Sniff',
         'CFBundleDevelopmentRegion': 'en', 'CFBundleLocalizations': ['en', 'pt', 'es'],
         'LSMinimumSystemVersion': '14.0', 'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': True, 'NSSupportsAutomaticTermination': False,
@@ -78,11 +77,4 @@ sign(contents / 'Helpers/sniff', 'app.sniff.cli')
 sign(contents / 'Helpers/SniffScheduler', 'app.sniff.scheduler.helper')
 sign(app, 'app.sniff.mac')
 run('/usr/bin/codesign', '--verify', '--deep', '--strict', app)
-if args.installer:
-    installer = output / 'Install Sniff.app'
-    installer_contents = bundle(installer, 'SniffInstaller', 'app.sniff.installer', 'Install Sniff')
-    (installer_contents / 'Resources/Payload').mkdir()
-    shutil.copytree(app, installer_contents / 'Resources/Payload/Sniff.app', symlinks=True)
-    sign(installer, 'app.sniff.installer')
-    run('/usr/bin/codesign', '--verify', '--deep', '--strict', installer)
 print(app)

@@ -2,7 +2,6 @@ import Foundation
 import Testing
 import SniffCore
 @testable import SniffCommands
-import SniffInstallation
 
 struct CommandFixture {
     let root: URL

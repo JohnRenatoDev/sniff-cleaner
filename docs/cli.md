@@ -4,7 +4,14 @@ The `sniff` command shares the app's scanner, settings and cleanup history. It r
 
 ## Install
 
-The installer can create a symlink at `~/.local/bin/sniff`. It points to the command inside the installed app, so an app update also updates the CLI. It does not edit shell profiles. If needed, add this line to your shell configuration:
+After dragging Sniff to Applications, you can create a link to the command inside the app:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+ln -s "/Applications/Sniff.app/Contents/Helpers/sniff" "$HOME/.local/bin/sniff"
+```
+
+The command refuses to replace an existing file or link. If a Sniff link already points to that app, app updates also update the CLI. The app does not edit shell profiles. If needed, add this line to your shell configuration:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"

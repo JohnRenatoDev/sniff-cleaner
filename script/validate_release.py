@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate packaged products using only an empty, disposable state store."""
-import argparse, json, platform, plistlib, subprocess, tarfile, tempfile
+import argparse, json, os, platform, plistlib, subprocess, tarfile, tempfile
+from ds_store import DSStore
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
@@ -9,7 +10,6 @@ args = parser.parse_args()
 root = args.directory.resolve()
 version = (Path(__file__).resolve().parent.parent / 'VERSION').read_text().strip()
 app = root / 'Sniff.app'
-installer = root / 'Install Sniff.app'
 
 def run(*command, code=0):
     result = subprocess.run(list(map(str, command)), text=True, capture_output=True, timeout=60)
@@ -29,9 +29,7 @@ def info(bundle, identifier):
     return data
 
 appinfo = info(app, 'app.sniff.mac')
-info(installer, 'app.sniff.installer')
-info(installer / 'Contents/Resources/Payload/Sniff.app', 'app.sniff.mac')
-products = [app / 'Contents/MacOS/Sniff', app / 'Contents/Helpers/sniff', app / 'Contents/Helpers/SniffScheduler', installer / 'Contents/MacOS/SniffInstaller']
+products = [app / 'Contents/MacOS/Sniff', app / 'Contents/Helpers/sniff', app / 'Contents/Helpers/SniffScheduler']
 architectures = {}
 for product in products:
     archs = run('/usr/bin/lipo', '-archs', product).split()
@@ -66,8 +64,32 @@ with tempfile.TemporaryDirectory(prefix='sniff-release-validation-', dir='/priva
     assert run(link, '--version') == version
     assert 'USO' in run(link, '--help', '--language', 'pt')
     checks += ['standalone-cli', 'standalone-cli-symlink-localization']
-run('/usr/bin/hdiutil', 'verify', root / f'Sniff-{version}-macos.dmg')
-report = {'version': version, 'hostArchitecture': platform.machine(), 'architectures': architectures,
+
+    image = root / f'Sniff-{version}-macos.dmg'
+    run('/usr/bin/hdiutil', 'verify', image)
+    attached = plistlib.loads(run('/usr/bin/hdiutil', 'attach', '-readonly', '-nobrowse', '-plist', image).encode())
+    mount = next(Path(entry['mount-point']) for entry in attached['system-entities'] if 'mount-point' in entry)
+    try:
+        assert {p.name for p in mount.iterdir() if not p.name.startswith('.')} == {'Sniff.app', 'Applications'}
+        assert (mount / 'Applications').is_symlink() and os.readlink(mount / 'Applications') == '/Applications'
+        info(mount / 'Sniff.app', 'app.sniff.mac')
+        with DSStore.open(str(mount / '.DS_Store'), 'r') as layout:
+            assert layout['Sniff.app']['Iloc'] == (140, 120)
+            assert layout['Applications']['Iloc'] == (500, 120)
+            assert layout['.']['icvl'] == (b'type', b'icnv')
+            assert layout['.']['icvp']['backgroundType'] == 2
+            window = layout['.']['bwsp']
+            assert not window['ShowSidebar'] and not window['ShowToolbar']
+        # Exercise Finder's copy operation in an exclusive fixture, never /Applications.
+        copied = fixture / 'Applications/Sniff.app'
+        copied.parent.mkdir()
+        run('/usr/bin/ditto', mount / 'Sniff.app', copied)
+        info(copied, 'app.sniff.mac')
+        assert run(copied / 'Contents/Helpers/sniff', '--version') == version
+        checks += ['drag-and-drop-layout', 'applications-shortcut', 'copied-app-signature']
+    finally:
+        run('/usr/bin/hdiutil', 'detach', mount)
+report = {'version': version, 'installation': 'drag-and-drop', 'hostArchitecture': platform.machine(), 'architectures': architectures,
           'signature': appinfo['SniffSigning'], 'notarization': 'not-verified-by-this-script',
           'checks': checks + ['codesign-deep-strict', 'catalog-parity', 'personal-path-exclusion', 'dmg-integrity'],
           'intelRuntimeTested': False, 'realUserCleanupPerformed': False}

@@ -8,15 +8,19 @@
 ./script/build_release.sh
 ```
 
-The script builds both architectures from a temporary source copy, then packages the app, CLI and installer. It excludes personal build paths and local scan data from the packages. Outputs are in `outputs/release/<version>/`:
+The script builds both architectures from a temporary source copy, then packages the app and CLI. It excludes personal build paths and local scan data from the packages. Outputs are in `outputs/release/<version>/`:
 
-- `Sniff-<version>-macos.dmg`: Install Sniff.app with a nested verified app payload.
+- `Sniff-<version>-macos.dmg`: Sniff.app and a shortcut to Applications, arranged for drag-and-drop installation.
 - `Sniff-<version>-macos.zip`: app for manual installation.
 - `sniff-<version>-macos-cli.tar.gz`: standalone command and required localization resources.
 - `SHA256SUMS`: hashes of the three downloads.
 - `validation.json`: bundle, signature, architecture and packaged CLI checks.
 
-The installer supports EN/PT/ES and optional CLI installation. It uses the shared dog animation and respects Reduce Motion. App updates are staged on the destination volume, and the copied app is checked before replacing an existing installation. If CLI installation fails, it attempts to restore the previous app. If recovery also fails, it preserves the previous app in the reported staging folder. No cleanup or shell profile edit runs during installation.
+The DMG opens in Finder with two icons and an arrow. Drag Sniff to Applications, eject the image and open the copied app. It does not launch a setup program, run a cleanup or configure the CLI. The [CLI reference](cli.md) covers the optional command link.
+
+The release script creates an isolated `work/dmg-tools` Python environment and installs the pinned tools in `script/dmg-requirements.txt`. These are packaging tools only; the app has no third-party runtime dependencies. `dmgbuild` writes Finder's layout metadata without GUI scripting. See its [settings reference](https://dmgbuild.readthedocs.io/en/latest/settings.html).
+
+Validation mounts the finished DMG read-only, checks that its only visible entries are Sniff.app and Applications, verifies the saved icon positions and copies the app into an exclusive temporary fixture to check its signature and CLI. It never copies to the real Applications folder.
 
 ## Signing
 

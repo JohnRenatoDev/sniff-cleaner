@@ -8,13 +8,15 @@ Sniff finds development caches and temporary files on your Mac. Review each path
 
 ## Install the preview
 
-Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG, run **Install Sniff.app** and choose where to install it. You can also install the `sniff` command. Your settings and scan history stay in place; installation does not run a cleanup.
+Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG and drag **Sniff** to **Applications**. Eject the disk image, then open Sniff from Applications.
+
+The CLI is optional and has [separate setup instructions](docs/cli.md).
 
 Requires macOS 14 or later. The downloads include Apple Silicon and Intel binaries. Runtime testing has been on Apple Silicon.
 
 This preview has a local ad hoc signature and has not been notarized by Apple. macOS may block the download. See the [installation notes](docs/INSTALL.txt) before opening it.
 
-![Sniff installation window](Resources/installer-preview.png)
+![Drag Sniff to Applications](Resources/dmg-preview.png)
 
 ## Review before cleaning
 
@@ -41,11 +43,11 @@ sniff clean --plan ./cleanup-plan.json
 
 ## Languages and mascot
 
-The app, CLI and installer support English, Portuguese and Spanish. Choose a language in Settings → General → Language. App text changes immediately; some macOS menu actions need an app restart.
+The app and CLI support English, Portuguese and Spanish. Choose a language in Settings → General → Language. App text changes immediately; some macOS menu actions need an app restart.
 
 Sniff's mascot is a hand-drawn dachshund. It follows a scent with short sniffs, pauses for a curious glance, then wags its tail in little bursts. Its hips and loose ear follow the movement.
 
-The dog animates during scans and cleanup and stays still when idle. The installer shares the same artwork. Reduce Motion keeps the dog still.
+The dog animates during scans and cleanup and stays still when idle. Reduce Motion keeps the dog still.
 
 <img src="Resources/mascot-preview.gif" width="360" alt="Sniff sniffing and wagging its tail">
 

@@ -2,7 +2,7 @@
 
 - `Sniff`: SwiftUI, cenas principal/Ajustes/barra de menus. `AppStore` mantém o estado observável no MainActor; scanner e executor trabalham com prioridade utility fora da UI. AppKit fica restrito à ativação, Finder, escolha de pastas e ao item nativo da barra de menus.
 - `SniffCore`: modelos Codable/Sendable, catálogo de regras, inventário de processos, scanner, políticas, remoção, persistência e política de agendamento. O módulo não usa dependências externas.
-- `SniffIdentity`: cachorro vetorial em Canvas. Cabeça e cauda se movem durante uma operação real e nas boas-vindas do instalador; Reduce Motion mantém a pose estática. A interface mostra a atividade, sem estimar porcentagens de progresso.
+- `SniffIdentity`: cachorro vetorial em Canvas. Cabeça e cauda se movem durante uma operação real; Reduce Motion mantém a pose estática. A interface mostra a atividade, sem estimar porcentagens de progresso.
 - `SniffIcon`: renderiza o mesmo vetor em PNG; o script monta o ICNS nas resoluções nativas.
 - `SniffScheduler`: entrada CLI para testes do mesmo runner usado pelo app em segundo plano.
 
@@ -50,11 +50,11 @@ As views recebem o locale escolhido e são atualizadas ao trocar o idioma. Texto
 
 Os registros de análise mantêm as mensagens originais. A apresentação traduz mensagens conhecidas e seus campos, incluindo os registros anteriores a esta versão. Capturas de caminhos, identificadores e saída de ferramentas são preservadas. Novas mensagens persistidas com parâmetros devem ser incluídas em `LegacyTemplates.json`; as traduções devem manter os mesmos placeholders numerados. Os testes conferem os três catálogos, a preferência, a formatação e a preservação de caminhos com caracteres especiais.
 
-## CLI e instalador
+## CLI e distribuição
 
 `SniffCommands` implementa parsing, seleção, exportação de planos e execução para `SniffCLI`. O produto SwiftPM chama-se `SniffCLI` para evitar colisão com `Sniff` em volumes que não diferenciam maiúsculas de minúsculas. O pacote instala o comando em `Contents/Helpers/sniff`; a CLI independente leva o bundle de recursos ao lado do binário. Ambos usam o mesmo executor e a mesma trava do app. A interface recarrega as preferências dentro da trava antes de analisar ou remover, incluindo mudanças feitas pela CLI.
 
-`SniffInstallation` valida o payload e o destino, copia para uma área temporária no mesmo volume, verifica a assinatura da cópia e troca o app existente atomicamente. A instalação opcional do link da CLI acontece por último. Falhas nessa etapa tentam restaurar o aplicativo anterior; se a recuperação falhar, a cópia anterior fica preservada no caminho indicado. `SniffInstaller` fornece a janela nativa com idiomas, destino, progresso das fases reais e mascote animado na tela de boas-vindas e durante a instalação. Reduce Motion mantém o desenho estático. O instalador não remove caches nem altera perfis do shell.
+O DMG contém somente o aplicativo e um atalho para `/Applications`, com os ícones posicionados para arrastar e soltar no Finder. Não há um executável de instalação. A CLI é opcional e pode ser vinculada separadamente ao binário dentro do app. O empacotamento valida o conteúdo do DMG e uma cópia do app em diretório temporário exclusivo.
 
 `script/build_release.sh` compila arm64 e x86_64 em uma cópia temporária dos fontes, empacota e valida DMG, ZIP e CLI. O certificado e o estado de notarização são limitações explícitas da distribuição. Veja [CLI](cli.md) e [releases](releases.md).
 
@@ -62,4 +62,4 @@ Os registros de análise mantêm as mensagens originais. A apresentação traduz
 
 Em builds de desenvolvimento, `open outputs/Sniff.app --args --project-preview` abre as views reais com dados de exemplo em memória e idioma inglês. Esse modo bloqueia análise, remoção, alterações no agendador e gravação de preferências. A versão distribuída não inclui o modo de prévia.
 
-`work/app-build/debug/SniffIcon --mascot-preview outputs/sniff-mascot.gif` exporta o mesmo desenho e ciclo usados na interface. O GIF tem 100 quadros, 25 fps e quatro segundos, com começo e fim contínuos.
+`work/app-build/debug/SniffIcon --mascot-preview outputs/sniff-mascot.gif` exporta o mesmo desenho e ciclo usados na interface. O GIF tem 300 quadros, 25 fps e 12 segundos, com pausas, expressões e começo e fim contínuos.

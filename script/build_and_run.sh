@@ -25,7 +25,7 @@ PY
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 swift build --build-system native --disable-sandbox --scratch-path work/app-build --cache-path work/swift-cache --config-path work/swift-config --security-path work/swift-security -j 4
 BIN_DIR="$(swift build --build-system native --scratch-path work/app-build --show-bin-path)"
-/usr/bin/python3 script/package_app.py --bin-dir "$BIN_DIR" --output-dir "$ROOT_DIR/outputs" --installer
+/usr/bin/python3 script/package_app.py --bin-dir "$BIN_DIR" --output-dir "$ROOT_DIR/outputs"
 cp work/packaging-icons/Sniff.png outputs/sniff-icon.png
 cp Resources/Sniff.svg outputs/sniff-logo.svg
 
