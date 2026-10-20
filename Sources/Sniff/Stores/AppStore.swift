@@ -21,8 +21,18 @@ final class AppStore: ObservableObject {
     var language = LanguagePreference.load()
     private let disk = StateStore()
     private var work: Task<Void, Never>?
+    private var presentationPreview: Bool {
+        #if DEBUG
+        PresentationPreview.enabled
+        #else
+        false
+        #endif
+    }
     init() {
         state = PersistedState()
+        #if DEBUG
+        if PresentationPreview.enabled { state = PresentationPreview.state(); language = .english; focusedPath = state.lastScan?.findings.first?.path; return }
+        #endif
         do { state = try disk.loadValidated() } catch { self.error = error.localizedDescription }
         if state.preferences.projectRoots.isEmpty {
             let code = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Code").path
@@ -61,6 +71,7 @@ final class AppStore: ObservableObject {
         selected = Set(findings.filter { $0.state == .ready && $0.category.allowsAutomatic && state.preferences.enabledCategories.contains($0.category) }.map(\.id))
     }
     func savePreferences() {
+        guard !presentationPreview else { return }
         do {
             let lock = try disk.lock(); defer { withExtendedLifetime(lock) {} }
             var current = disk.load(); current.preferences = state.preferences
@@ -68,7 +79,7 @@ final class AppStore: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
     func refresh() {
-        guard !busy else { return }
+        guard !presentationPreview, !busy else { return }
         language = LanguagePreference.load()
         do { state = try disk.loadValidated(); applyExclusions(); refreshSchedule() }
         catch { self.error = error.localizedDescription }
@@ -79,7 +90,7 @@ final class AppStore: ObservableObject {
         NativeMenuLocalization.update()
     }
     func scan() {
-        guard !busy else { return }
+        guard !presentationPreview, !busy else { return }
         busy = true; canCancel = true; activity = "Começando a farejar…"; selected.removeAll(); error = nil
         let disk = disk
         work = Task { [self] in
@@ -101,7 +112,7 @@ final class AppStore: ObservableObject {
         }
     }
     func cleanReviewedPlan() {
-        guard !busy, let scan = state.lastScan, !plan.isEmpty else { return }
+        guard !presentationPreview, !busy, let scan = state.lastScan, !plan.isEmpty else { return }
         let approved = plan; let disk = disk
         reviewing = false; busy = true; activity = "Conferindo os itens escolhidos antes de remover…"; error = nil
         work = Task { [self] in
@@ -141,6 +152,7 @@ final class AppStore: ObservableObject {
         scheduleStatus = status.title; needsApproval = status.approval
     }
     func applySchedule() {
+        guard !presentationPreview else { return }
         state.preferences.nextRun = SchedulePolicy.nextDate(hours: state.preferences.intervalHours)
         savePreferences()
         do {
@@ -153,6 +165,7 @@ final class AppStore: ObservableObject {
         } catch { self.error = "O macOS não registrou o agendador: \(error.localizedDescription)"; refreshSchedule() }
     }
     func setNotifications(_ enabled: Bool) {
+        guard !presentationPreview else { return }
         state.preferences.notificationsEnabled = enabled; savePreferences()
         if enabled { NotificationService.requestPermission { [weak self] allowed in
             if !allowed { self?.error = "Notificações não autorizadas pelo macOS. Os resultados continuam no Sniff." }

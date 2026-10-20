@@ -4,6 +4,29 @@ import SniffIdentity
 import ImageIO
 import UniformTypeIdentifiers
 
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--mascot-preview" {
+    let output = URL(fileURLWithPath: CommandLine.arguments[2])
+    let rate = 25.0
+    let count = Int(DogMotion.duration * rate)
+    guard let destination = CGImageDestinationCreateWithURL(output as CFURL, UTType.gif.identifier as CFString, count, nil) else { fatalError("Cannot create motion preview.") }
+    CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+    for index in 0..<count {
+        let pose = DogMotion.pose(at: Double(index) / rate)
+        let frame = NSImage(size: NSSize(width: 540, height: 330), flipped: true) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.setFillColor(NSColor.white.cgColor); context.fill(rect)
+            DogDrawing.draw(in: context, size: rect.size, pose: pose, ink: NSColor(calibratedWhite: 0.14, alpha: 1).cgColor)
+            return true
+        }
+        if let image = frame.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            CGImageDestinationAddImage(destination, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1 / rate]] as CFDictionary)
+        }
+    }
+    guard CGImageDestinationFinalize(destination) else { fatalError("Cannot save motion preview.") }
+    print(output.path)
+    exit(0)
+}
+
 if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--menu-bar-preview" {
     let output = URL(fileURLWithPath: CommandLine.arguments[2])
     let frames = MenuBarDogImages.animation()

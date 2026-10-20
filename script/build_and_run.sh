@@ -32,7 +32,7 @@ cp Resources/Sniff.svg outputs/sniff-logo.svg
 case "$MODE" in
     run) /usr/bin/open -n "$DELIVERY" ;;
     --verify|verify) /usr/bin/open -n "$DELIVERY"; sleep 1; pgrep -x Sniff >/dev/null; echo "Sniff compilado e aberto." ;;
-    --validate-menu-bar) /usr/bin/open -n "$DELIVERY" --args --validate-menu-bar "$ROOT_DIR/work/menu-bar-validation.json" ;;
+    --validate-menu-bar) /usr/bin/open -n "$DELIVERY" --args --project-preview --validate-menu-bar "$ROOT_DIR/work/menu-bar-validation.json" ;;
     --debug|debug) lldb -- "$DELIVERY/Contents/MacOS/Sniff" ;;
     --logs|logs) /usr/bin/open -n "$DELIVERY"; /usr/bin/log stream --info --style compact --predicate 'process == "Sniff"' ;;
     --telemetry|telemetry) /usr/bin/open -n "$DELIVERY"; /usr/bin/log stream --info --style compact --predicate 'subsystem == "app.sniff.mac"' ;;

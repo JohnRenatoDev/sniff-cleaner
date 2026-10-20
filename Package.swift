@@ -23,6 +23,7 @@ let package = Package(
         .executableTarget(name: "Sniff", dependencies: ["SniffCore", "SniffIdentity"], swiftSettings: [.defaultIsolation(MainActor.self)]),
         .executableTarget(name: "SniffScheduler", dependencies: ["SniffCore"]),
         .executableTarget(name: "SniffIcon", dependencies: ["SniffIdentity"]),
+        .testTarget(name: "SniffMotionTests", dependencies: ["SniffIdentity"]),
         .testTarget(name: "SniffCoreTests", dependencies: ["SniffCore"]),
         .testTarget(name: "SniffCommandTests", dependencies: ["SniffCore", "SniffCommands", "SniffInstallation"])
     ]

@@ -1,14 +1,14 @@
 # Arquitetura
 
 - `Sniff`: SwiftUI, cenas principal/Ajustes/barra de menus. `AppStore` mantém o estado observável no MainActor; scanner e executor trabalham com prioridade utility fora da UI. AppKit fica restrito à ativação, Finder, escolha de pastas e ao item nativo da barra de menus.
-- `SniffCore`: modelos Codable/Sendable, catálogo de regras, inventário de processos, scanner, políticas, remoção, persistência e política de agendamento. Sem dependências externas.
-- `SniffIdentity`: cachorro vetorial em Canvas. Cabeça e cauda se movem durante uma operação real e nas boas-vindas do instalador; Reduce Motion mantém a pose estática. Sem porcentagens artificiais.
+- `SniffCore`: modelos Codable/Sendable, catálogo de regras, inventário de processos, scanner, políticas, remoção, persistência e política de agendamento. O módulo não usa dependências externas.
+- `SniffIdentity`: cachorro vetorial em Canvas. Cabeça e cauda se movem durante uma operação real e nas boas-vindas do instalador; Reduce Motion mantém a pose estática. A interface mostra a atividade, sem estimar porcentagens de progresso.
 - `SniffIcon`: renderiza o mesmo vetor em PNG; o script monta o ICNS nas resoluções nativas.
 - `SniffScheduler`: entrada CLI para testes do mesmo runner usado pelo app em segundo plano.
 
 ## Agendamento nativo
 
-O bundle inclui `Contents/Library/LaunchAgents/app.sniff.scheduler.plist`, com `BundleProgram=Contents/MacOS/Sniff` e argumento `--scheduled`. `SMAppService.agent(plistName:)` registra/remove o serviço do usuário. O processo executa uma vez e sai; `StartInterval=900` verifica se chegou a hora. Sem root, sudo, daemon de sistema ou serviço externo.
+O bundle inclui `Contents/Library/LaunchAgents/app.sniff.scheduler.plist`, com `BundleProgram=Contents/MacOS/Sniff` e argumento `--scheduled`. `SMAppService.agent(plistName:)` registra/remove o serviço do usuário. O processo executa uma vez e sai; `StartInterval=900` verifica se chegou a hora. O serviço roda na conta do usuário e dispensa root, sudo, daemon de sistema ou serviço externo.
 
 Preferências controlam frequência, modo e próxima execução. A análise agendada cobre caches conhecidos. Builds ativos ou inventário inconclusivo adiam a execução por uma hora. Worktrees, Docker e projetos entram na análise manual. O monitor compara metadados das raízes a cada seis horas, sem calcular tamanhos recursivos. Isso sinaliza mudança, não quantidade de bytes acumulados.
 
@@ -26,22 +26,22 @@ Worktrees têm medição limitada a 0,18 s / 3.000 entradas por item. Valores in
 
 ## Fontes primárias consultadas
 
-- [SMAppService — Apple](https://developer.apple.com/documentation/servicemanagement/smappservice)
-- [Helpers em bundles — Apple](https://developer.apple.com/documentation/servicemanagement/updating-helper-executables-from-earlier-versions-of-macos)
-- [CodeSignCloneManager — Chromium](https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/mac/code_sign_clone_manager.h)
-- [Implementação dos clones — Chromium](https://chromium.googlesource.com/chromium/src/+/lkgr/chrome/browser/mac/code_sign_clone_manager.mm)
+- [SMAppService: Apple](https://developer.apple.com/documentation/servicemanagement/smappservice)
+- [Helpers em bundles: Apple](https://developer.apple.com/documentation/servicemanagement/updating-helper-executables-from-earlier-versions-of-macos)
+- [CodeSignCloneManager: Chromium](https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/mac/code_sign_clone_manager.h)
+- [Implementação dos clones: Chromium](https://chromium.googlesource.com/chromium/src/+/lkgr/chrome/browser/mac/code_sign_clone_manager.mm)
 
-## Logo na barra de menus — 0.1.1
+## Ícone na barra de menus
 
-A barra usa um `NSStatusItem` mantido pelo AppDelegate, independente da janela principal. O cachorro tem desenho próprio para 30 × 18 pt e imagem template monocromática, acompanhando a aparência do macOS.
+O AppDelegate mantém um `NSStatusItem` independente da janela principal. O cachorro usa o mesmo desenho do app, com traço reforçado para 30 × 18 pt. A imagem template monocromática acompanha a aparência do macOS.
 
-Durante análise e limpeza, um timer no run loop comum alterna 24 quadros a 16 fps. O focinho fareja e o rabo gira em torno da base. O timer é invalidado ao ficar ocioso e não roda em repouso. A opção Reduzir Movimento mantém o desenho estático e preserva o texto acessível de atividade. O menu continua oferecendo abrir o app, analisar e acessar Ajustes.
+Durante análise e limpeza, um timer no run loop comum escolhe entre 120 quadros a 30 fps pelo tempo decorrido. O ciclo dura quatro segundos e repete com a mesma posição e velocidade. O focinho fareja e o rabo gira em torno da base. O timer é invalidado ao ficar ocioso e não roda em repouso. A opção Reduzir Movimento mantém o desenho estático e preserva o texto acessível de atividade. O menu continua oferecendo abrir o app, analisar e acessar Ajustes.
 
 O estado manual vem da observação de `AppStore.busy/canCancel`. O helper agendado envia notificações locais de início/fim ao app aberto, contendo somente PID e fase; elas só alteram a apresentação e não autorizam remoções. A existência do processo é verificada para evitar ícone ativo após um encerramento inesperado do helper. Com o aplicativo encerrado, o helper permanece sem interface, como antes.
 
 Validação específica: `./script/build_and_run.sh --validate-menu-bar` (somente DEBUG) usa o executor real em 12 diretórios descartáveis de `/private/tmp`, sem mudar histórico ou preferências. Produz `work/menu-bar-validation.json`, com contagem de quadros exibidos, presença da janela do item nativo e parada do timer. A prévia ampliada usa o mesmo renderer e pode ser exportada com `work/app-build/debug/SniffIcon --menu-bar-preview outputs/menu-bar-dog.gif`.
 
-[Personalização de NSStatusItem.button — Apple](https://developer.apple.com/documentation/appkit/nsstatusitem/button)
+[Personalização de NSStatusItem.button: Apple](https://developer.apple.com/documentation/appkit/nsstatusitem/button)
 ## Idiomas
 
 Os catálogos `en.lproj`, `pt.lproj` e `es.lproj` ficam no bundle de recursos do SniffCore, incluído no aplicativo pelo script de build. O app e o helper usam a mesma preferência `interfaceLanguage` no domínio `app.sniff.mac`. Essa preferência não altera o JSON das análises nem as permissões de limpeza.
@@ -57,3 +57,9 @@ Os registros de análise mantêm as mensagens originais. A apresentação traduz
 `SniffInstallation` valida o payload e o destino, copia para uma área temporária no mesmo volume, verifica a assinatura da cópia e troca o app existente atomicamente. A instalação opcional do link da CLI acontece por último. Falhas nessa etapa tentam restaurar o aplicativo anterior; se a recuperação falhar, a cópia anterior fica preservada no caminho indicado. `SniffInstaller` fornece a janela nativa com idiomas, destino, progresso das fases reais e mascote animado na tela de boas-vindas e durante a instalação. Reduce Motion mantém o desenho estático. O instalador não remove caches nem altera perfis do shell.
 
 `script/build_release.sh` compila arm64 e x86_64 em uma cópia temporária dos fontes, empacota e valida DMG, ZIP e CLI. O certificado e o estado de notarização são limitações explícitas da distribuição. Veja [CLI](cli.md) e [releases](releases.md).
+
+## Capturas do projeto
+
+Em builds de desenvolvimento, `open outputs/Sniff.app --args --project-preview` abre as views reais com dados de exemplo em memória e idioma inglês. Esse modo bloqueia análise, remoção, alterações no agendador e gravação de preferências. A versão distribuída não inclui o modo de prévia.
+
+`work/app-build/debug/SniffIcon --mascot-preview outputs/sniff-mascot.gif` exporta o mesmo desenho e ciclo usados na interface. O GIF tem 100 quadros, 25 fps e quatro segundos, com começo e fim contínuos.

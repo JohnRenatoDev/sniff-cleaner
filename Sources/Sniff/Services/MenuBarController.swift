@@ -13,6 +13,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let frames = MenuBarDogImages.animation()
     private var timer: Timer?
     private var frame = 0
+    private var animationStart: TimeInterval = 0
     private var scheduledPID: Int32?
     private var scheduledCleaning = false
     private var workerCheck: Timer?
@@ -55,16 +56,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
         guard timer == nil else { return }
         frame = 0
+        animationStart = ProcessInfo.processInfo.systemUptime
         item.button?.image = frames[0]
         let clock = Timer(timeInterval: 1 / MenuBarDogImages.framesPerSecond, target: self, selector: #selector(advanceFrame), userInfo: nil, repeats: true)
-        clock.tolerance = 0.012
+        clock.tolerance = 0.003
         timer = clock
         // The dog keeps moving when its menu is open, as well as with the main window closed.
         RunLoop.main.add(clock, forMode: .common)
     }
 
     @objc private func advanceFrame() {
-        frame = (frame + 1) % frames.count
+        let elapsed = ProcessInfo.processInfo.systemUptime - animationStart
+        frame = Int(elapsed * MenuBarDogImages.framesPerSecond) % frames.count
         displayedAnimationFrames += 1
         item.button?.image = frames[frame]
     }

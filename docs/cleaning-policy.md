@@ -1,10 +1,10 @@
-# Políticas de limpeza — 0.1
+# Políticas de limpeza
 
 ## Princípios
 
-Tamanho grande não é evidência de descarte. A análise é separada da remoção. Itens começam desmarcados. Nunca encerrar navegador, agente, build ou app para liberar um arquivo. Sem Full Disk Access ou sudo automático. Uma falha de acesso aparece como indisponibilidade; não como tamanho zero confirmado.
+O tamanho do arquivo, por si só, não autoriza o descarte. A análise é separada da remoção. Itens começam desmarcados. Nunca encerrar navegador, agente, build ou app para liberar um arquivo. Sem Full Disk Access ou sudo automático. Uma falha de acesso aparece como indisponibilidade; não como tamanho zero confirmado.
 
-O plano vence em 15 minutos. Imediatamente antes de remover, o executor confere regras, seleção da categoria, exclusões, retenção, manifesto e processos visíveis. Repete a comparação do conteúdo depois da verificação de uso. Mudança ou incerteza preserva o item e produz um resultado individual.
+O plano vence em 15 minutos. Imediatamente antes de remover, o executor confere regras, seleção da categoria, exclusões, retenção, manifesto e processos visíveis. Repete a comparação do conteúdo depois da verificação de uso. Se o conteúdo mudou ou a verificação foi inconclusiva, o executor mantém o item e registra o motivo.
 
 A remoção usa descritores de diretório, `openat(O_NOFOLLOW)`, `fstatat` e `unlinkat`. Não segue symlinks internos; remove o link em si. Recusa symlinks em ancestrais e fronteiras de volumes. Só entradas do manifesto são removidas. Arquivos novos ou erros podem resultar em remoção parcial, informada no histórico. Nenhuma inspeção de processos elimina a possibilidade de uma aplicação começar a usar arquivos logo depois da checagem.
 
@@ -35,7 +35,7 @@ O inventário de worktrees consulta dirty/untracked, ignorados, branch e commits
 
 Docker mostra o total e o recuperável informado pelo engine, separados do espaço APFS. Imagem sem tag não significa imagem sem container. Esta versão não executa prune, `system prune -a`, remoção de volumes ou bancos.
 
-Clones Chromium/Electron são parte legítima do mecanismo de atualização. Uma consulta direta ao executável via `lsof` detecta uso por inode/hardlink mesmo que o caminho exibido seja outro. Existência do clone não comprova bug. O Sniff não altera validação de assinatura.
+Clones Chromium/Electron são parte legítima do mecanismo de atualização. Uma consulta direta ao executável via `lsof` detecta uso por inode/hardlink mesmo que o caminho exibido seja outro. A existência de um clone não comprova um defeito. O Sniff não altera validação de assinatura.
 
 ## Proteções
 

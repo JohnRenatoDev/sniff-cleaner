@@ -40,10 +40,16 @@ public enum LanguagePreference {
     // A separate preference keeps existing scan/history JSON compatible and is shared with the helper.
     private static let domain = "app.sniff.mac"
     public static func load(from defaults: UserDefaults? = nil) -> AppLanguage {
+        #if DEBUG
+        if defaults == nil, CommandLine.arguments.contains("--project-preview") { return .english }
+        #endif
         let defaults = defaults ?? UserDefaults(suiteName: domain) ?? .standard
         return defaults.string(forKey: "interfaceLanguage").flatMap(AppLanguage.init(rawValue:)) ?? .system
     }
     public static func save(_ language: AppLanguage, to defaults: UserDefaults? = nil) {
+        #if DEBUG
+        if defaults == nil, CommandLine.arguments.contains("--project-preview") { return }
+        #endif
         let defaults = defaults ?? UserDefaults(suiteName: domain) ?? .standard
         defaults.set(language.rawValue, forKey: "interfaceLanguage")
         // AppKit reads this per-app preference when the process starts. System dialogs and

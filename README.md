@@ -1,16 +1,33 @@
 # Sniff Cleaner
 
-Sniff is a native macOS app for reviewing development caches and temporary files before cleaning them up. Its dog mascot sniffs and wags its tail while a scan or cleanup is running.
+Sniff finds development caches and temporary files on your Mac. Review each path, choose what to delete and confirm the cleanup. The app checks the files again before removing them.
 
-The interface is available in English, Portuguese and Spanish. Choose a language in **Settings → General → Language**. App text changes immediately; some macOS menu actions require reopening the app.
+![Sniff showing cache sizes and files kept in use](Resources/app-preview.png)
+
+*Example scan with sample data. The sizes shown are estimates, not a promise of space recovered.*
 
 ## Install the preview
 
-Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG and launch **Install Sniff.app**. The native installer includes the animated dog mascot, language selection, destination choice and optional CLI installation. It preserves settings and scan history and never runs a cleanup. macOS 14 or later; Apple Silicon and Intel.
+Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG, run **Install Sniff.app** and choose where to install it. You can also install the `sniff` command. Your settings and scan history stay in place; installation does not run a cleanup.
 
-This preview is locally signed and **not notarized by Apple**. See [installation notes](docs/INSTALL.txt) for the distribution limitation.
+Requires macOS 14 or later. The downloads include Apple Silicon and Intel binaries. Runtime testing has been on Apple Silicon.
 
-![Sniff installer with animated dog mascot](Resources/installer-preview.gif)
+This preview has a local ad hoc signature and has not been notarized by Apple. macOS may block the download. See the [installation notes](docs/INSTALL.txt) before opening it.
+
+![Sniff installation window](Resources/installer-preview.png)
+
+## Review before cleaning
+
+1. Scan the Mac. Scanning does not remove files.
+2. Check each item's path, status and reason for preservation.
+3. Select the items you want to remove and choose **Review cleanup**.
+4. Review the full paths and confirm permanent removal. Sniff rechecks the files and process usage before removing them.
+
+Items start unchecked. In Settings, you can choose project folders, exclude paths and set retention periods. An exclusion inside a folder keeps the whole folder.
+
+Automatic cleanup is off by default. If you enable it, Sniff cleans only enabled categories of caches that tools can recreate. Worktrees, Docker and code signing copies are available for inspection only. By default, Sniff keeps source code, sessions, credentials, databases, container volumes and the main runtime.
+
+File allocation is an estimate. History shows the measured change in free disk space separately, because APFS snapshots, hardlinks and other applications can affect the result.
 
 ## Command line
 
@@ -20,7 +37,15 @@ sniff plan --category npm --output ./cleanup-plan.json
 sniff clean --plan ./cleanup-plan.json
 ```
 
-Cleanup requires a reviewed plan and explicit confirmation. JSON output is available for automation. See [CLI reference](docs/cli.md) for installation, commands, safeguards and exit codes.
+`clean` requires a saved plan and asks you to confirm deletion. The CLI also supports JSON output for automation. The [CLI reference](docs/cli.md) covers installation, commands, cleanup checks and exit codes.
+
+## Languages and mascot
+
+The app, CLI and installer support English, Portuguese and Spanish. Choose a language in Settings → General → Language. App text changes immediately; some macOS menu actions need an app restart.
+
+The dog in the menu bar sniffs and wags its tail during a scan or cleanup. It stays still when idle. The installer uses the same artwork, and Reduce Motion keeps the dog still.
+
+<img src="Resources/mascot-preview.gif" width="360" alt="Sniff sniffing and wagging its tail">
 
 ## Build and run
 
@@ -30,34 +55,17 @@ Requires macOS 14 or later and a Swift 6.2 or newer toolchain.
 ./script/build_and_run.sh
 ```
 
-This builds the Swift package, creates a locally signed application and opens it. Build products and local scan results are excluded from Git.
+The script builds the Swift package, packages a locally signed app and opens it. Build products and local scan results are excluded from Git.
 
-## Review before cleaning
-
-1. Scan the Mac. Scanning does not remove files.
-2. Check each item's path, status and reason for preservation.
-3. Select the items you want to remove and choose **Review cleanup**.
-4. Review the full paths and confirm permanent removal. Sniff rechecks the files and process usage before removing them.
-
-Project roots, exclusions and retention periods are configurable in Settings. Excluding a path inside an item preserves the entire item. Initial selection is empty.
-
-Automatic cleanup is optional and disabled by default. It only uses enabled categories of recreatable caches. Worktrees, Docker and code signing copies are inspection-only. Source code, sessions, credentials, databases, container volumes and the main runtime are preserved by default.
-
-Allocated file sizes are estimates. Cleanup history reports the measured change in free space separately; APFS, snapshots, hardlinks and other applications can affect it.
-
-## Tests
+## Tests and release builds
 
 ```sh
 ./script/test.sh
 ./script/test_scheduler.sh
 ```
 
-Tests that remove files use dedicated temporary fixtures. The scheduler integration test creates and removes a temporary LaunchAgent without cleaning real user data.
+Removal tests use temporary fixtures. The scheduler test creates a temporary LaunchAgent, checks that macOS starts it and removes the job afterward. It does not clean user data.
 
-## Distribution
+Build universal release files with `./script/build_release.sh`. See the [release and signing instructions](docs/releases.md) for packaging, Developer ID signing and notarization. These are required before offering a trusted public macOS download.
 
-This is a development preview with a local ad hoc signature. It has not been notarized by Apple. Developer ID signing and notarization are required before presenting it as a trusted, generally distributable macOS download.
-
-Build universal release artifacts with `./script/build_release.sh`. See [release and signing instructions](docs/releases.md).
-
-See [architecture](docs/architecture.md) and [cleanup policy](docs/cleaning-policy.md) for implementation details and current limits.
+See [architecture](docs/architecture.md) and [cleanup policy](docs/cleaning-policy.md) for the implementation and its limits.
