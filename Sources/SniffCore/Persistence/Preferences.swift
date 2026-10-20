@@ -38,16 +38,22 @@ public struct StateStore: Sendable {
     public init(directory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Sniff")) { self.directory = directory }
     public var file: URL { directory.appendingPathComponent("state.json") }
     public func load() -> PersistedState {
-        var data = try? Data(contentsOf: file)
+        (try? loadValidated()) ?? PersistedState()
+    }
+    public func loadValidated() throws -> PersistedState {
+        if let stamp = try? FileTree.stamp(file.path), stamp.isSymlink { throw SniffError.message("O arquivo de estado é um link simbólico. Nenhum estado foi sobrescrito.") }
+        var data = FileManager.default.fileExists(atPath: file.path) ? try Data(contentsOf: file) : nil
         if data == nil, directory == StateStore().directory {
             // Preserve this task's initial local analysis after the public name changed.
             let previous = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Fuca/state.json")
-            data = try? Data(contentsOf: previous)
+            if FileManager.default.fileExists(atPath: previous.path) { data = try Data(contentsOf: previous) }
         }
-        guard let data, let value = try? JSONDecoder().decode(PersistedState.self, from: data) else { return PersistedState() }
-        return value
+        guard let data else { return PersistedState() }
+        do { return try JSONDecoder().decode(PersistedState.self, from: data) }
+        catch { throw SniffError.message("O estado salvo não pôde ser lido. Preserve uma cópia antes de reparar o arquivo; ele não será sobrescrito.") }
     }
     public func save(_ state: PersistedState) throws {
+        if (try? FileTree.stamp(file.path)) != nil { _ = try loadValidated() }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let data = try JSONEncoder().encode(state)
         try data.write(to: file, options: .atomic)

@@ -4,6 +4,24 @@ Sniff is a native macOS app for reviewing development caches and temporary files
 
 The interface is available in English, Portuguese and Spanish. Choose a language in **Settings → General → Language**. App text changes immediately; some macOS menu actions require reopening the app.
 
+## Install the preview
+
+Download the latest private [prerelease](https://github.com/JohnRenatoDev/sniff-cleaner/releases). Open the DMG and launch **Install Sniff.app**. The native installer includes the animated dog mascot, language selection, destination choice and optional CLI installation. It preserves settings and scan history and never runs a cleanup. macOS 14 or later; Apple Silicon and Intel.
+
+This preview is locally signed and **not notarized by Apple**. See [installation notes](docs/INSTALL.txt) for the distribution limitation.
+
+![Sniff installer with animated dog mascot](Resources/installer-preview.gif)
+
+## Command line
+
+```sh
+sniff scan --quick
+sniff plan --category npm --output ./cleanup-plan.json
+sniff clean --plan ./cleanup-plan.json
+```
+
+Cleanup requires a reviewed plan and explicit confirmation. JSON output is available for automation. See [CLI reference](docs/cli.md) for installation, commands, safeguards and exit codes.
+
 ## Build and run
 
 Requires macOS 14 or later and a Swift 6.2 or newer toolchain.
@@ -39,5 +57,7 @@ Tests that remove files use dedicated temporary fixtures. The scheduler integrat
 ## Distribution
 
 This is a development preview with a local ad hoc signature. It has not been notarized by Apple. Developer ID signing and notarization are required before presenting it as a trusted, generally distributable macOS download.
+
+Build universal release artifacts with `./script/build_release.sh`. See [release and signing instructions](docs/releases.md).
 
 See [architecture](docs/architecture.md) and [cleanup policy](docs/cleaning-policy.md) for implementation details and current limits.

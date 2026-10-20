@@ -7,10 +7,12 @@ public enum Localization {
     public static var locale: Locale { language.locale }
     private static let resourceBundle: Bundle = {
         let name = "Sniff_SniffCore.bundle"
+        let executable = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
         let candidates = [
             Bundle.main.resourceURL?.appendingPathComponent(name),
             Bundle.main.bundleURL.appendingPathComponent(name),
-            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("../Resources/" + name)
+            executable?.appendingPathComponent(name),
+            executable?.appendingPathComponent("../Resources/" + name)
         ]
         for case let url? in candidates { if let bundle = Bundle(url: url) { return bundle } }
         return .module
@@ -68,7 +70,7 @@ public enum Localization {
             // paths, command output, identifiers or numbers, even when they resemble UI text.
             if template.key == "Farejando {0}…" || template.key == "Branch: {0}" {
                 arguments[0] = catalogs[language.rawValue]?[arguments[0]] ?? arguments[0]
-            } else if template.key == "Tamanho não concluído: {0}" || template.key == "O macOS não registrou o agendador: {0}" {
+            } else if template.key == "Tamanho não concluído: {0}" || template.key == "O macOS não registrou o agendador: {0}" || template.key == "Limpeza parcial. Alguns arquivos foram removidos; analise novamente. {0}" {
                 arguments[0] = render(arguments[0], language: language, depth: depth + 1)
             }
             return format(catalogs[language.rawValue]?[template.key] ?? template.key, arguments: arguments)

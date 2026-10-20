@@ -16,6 +16,7 @@ struct HistoryView: View {
                     ForEach(Array(store.state.history.enumerated()), id: \.offset) { _, report in
                         Section(Display.date(report.date)) {
                             LabeledContent(L("Itens removidos"), value: L("{0} de {1}", report.outcomes.filter(\.removed).count, report.outcomes.count))
+                            if report.partialCount > 0 { LabeledContent(L("Itens com limpeza parcial"), value: Display.number(report.partialCount)) }
                             LabeledContent(L("Tamanho alocado removido"), value: Display.bytes(report.removedAllocated))
                             if let delta = report.netChange {
                                 LabeledContent(L("Variação de espaço livre"), value: (delta >= 0 ? "+" : "−") + Display.bytes(abs(delta)))
@@ -23,7 +24,7 @@ struct HistoryView: View {
                             Text(L("Outros apps também alteram o espaço livre. A soma dos arquivos removidos pode ser diferente dessa variação.")).font(.caption).foregroundStyle(.secondary)
                             ForEach(report.outcomes) { outcome in
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Label(Display.path(outcome.path), systemImage: outcome.removed ? "checkmark.circle" : "hand.raised").textSelection(.enabled)
+                                    Label(Display.path(outcome.path), systemImage: outcome.removed ? "checkmark.circle" : outcome.partiallyRemoved == true ? "exclamationmark.triangle" : "hand.raised").textSelection(.enabled)
                                     Text(L(outcome.message)).font(.caption).foregroundStyle(.secondary)
                                 }.padding(.vertical, 4)
                             }

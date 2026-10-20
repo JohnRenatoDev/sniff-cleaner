@@ -1,0 +1,18 @@
+Sniff 0.3.0 preview — macOS 14 or later
+
+1. Open Install Sniff.app from this disk image.
+2. Choose English, Portuguese or Spanish.
+3. Choose an application folder and whether to install the sniff command.
+4. Click Install Sniff. The installer copies and verifies the app, then offers to open it.
+5. Eject this disk image after installation.
+
+The dog mascot is animated on the welcome and installation screen. Reduce Motion is respected. Progress reflects copying, verification and command installation.
+
+The default application folder is /Applications if writable, otherwise ~/Applications. No administrator password is requested. The optional CLI symlink is ~/.local/bin/sniff. Shell profiles are not edited.
+
+Your settings and scan history are preserved. No cleanup runs during installation. Quit an installed Sniff app and its CLI before updating it. An unrelated application or command is never overwritten.
+
+This preview has a local ad hoc signature and has NOT been notarized by Apple. macOS may block a downloaded preview. Inspect the private repository and verify SHA256SUMS before deciding whether to allow it in System Settings > Privacy & Security. Do not disable Gatekeeper globally. Developer ID signing and Apple notarization are still required for a trusted public release.
+
+Source and release notes:
+https://github.com/JohnRenatoDev/sniff-cleaner

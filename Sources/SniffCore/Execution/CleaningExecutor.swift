@@ -27,6 +27,9 @@ public struct CleaningExecutor: Sendable {
                 if let reason = catalog.protectedReason(finding.path, preferences: preferences) { throw SniffError.message(reason) }
                 let current = try FileTree.read(finding.path)
                 guard current == finding.manifest else { throw SniffError.message("Conteúdo mudou desde a análise. Preservado; analise novamente.") }
+                if finding.category == .npx && NpxPolicy.mustPreserve(finding.path) {
+                    throw SniffError.message("Ambiente npx com MCP ou conteúdo não verificável. Item preservado.")
+                }
                 if [.npx, .runtimeInstall, .installer, .logs].contains(finding.category) {
                     let days = finding.category == .logs ? preferences.logRetentionDays : preferences.retentionDays
                     let cutoff = Date().addingTimeInterval(-Double(max(days, 1)) * 86_400).timeIntervalSince1970
@@ -37,7 +40,10 @@ public struct CleaningExecutor: Sendable {
                 guard try FileTree.read(finding.path) == finding.manifest else { throw SniffError.message("Item mudou durante a verificação de uso. Preservado.") }
                 acceptedPaths.append(finding.path)
                 try SecureRemoval.remove(path: finding.path, manifest: finding.manifest)
-                outcome.removed = true; outcome.allocatedBytes = finding.allocatedBytes; outcome.message = "Removido após revalidação."
+                outcome.removed = true; outcome.allocatedBytes = FileTree.sizes(current).allocated; outcome.message = "Removido após revalidação."
+            } catch let partial as SecureRemoval.PartialFailure {
+                outcome.partiallyRemoved = true; outcome.allocatedBytes = partial.allocatedBytes
+                outcome.message = "Limpeza parcial. Alguns arquivos foram removidos; analise novamente. " + partial.reason
             } catch is CancellationError { outcome.message = "Cancelado; item preservado." }
             catch { outcome.message = error.localizedDescription }
             report.outcomes.append(outcome)

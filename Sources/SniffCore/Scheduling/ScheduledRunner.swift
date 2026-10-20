@@ -5,7 +5,7 @@ public enum ScheduledRunner {
     public static func run(store: StateStore = .init(), fixture: Bool = false) throws -> String? {
         let lock = try store.lock()
         defer { withExtendedLifetime(lock) {} }
-        var state = store.load()
+        var state = try store.loadValidated()
         state.schedulerLastWake = .now
         if fixture {
             state.schedulerMessage = "Helper executado por launchd em fixture; nenhuma limpeza."
@@ -28,9 +28,8 @@ public enum ScheduledRunner {
         if state.preferences.scheduleMode == .automatic {
             let plan = snapshot.findings.filter { $0.state == .ready && $0.category.allowsAutomatic && state.preferences.enabledCategories.contains($0.category) }
             let report = CleaningExecutor(catalog: catalog).execute(plan: plan, scannedAt: snapshot.date, preferences: state.preferences, automatic: true)
-            state.history.insert(report, at: 0); state.history = Array(state.history.prefix(30))
+            state.apply(report)
             let removed = Set(report.outcomes.filter(\.removed).map(\.path))
-            state.lastScan?.findings.removeAll { removed.contains($0.path) }
             state.schedulerMessage = "Limpeza agendada: \(removed.count) itens removidos. Consulte o histórico."
         } else {
             let count = snapshot.findings.filter { $0.state == .ready }.count

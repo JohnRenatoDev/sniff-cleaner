@@ -1,0 +1,29 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Toolchain
+        run: swift --version
+      - name: Tests
+        run: ./script/test.sh
+      - name: Package universal preview
+        run: ./script/build_release.sh
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: sniff-macos-preview
+          path: |
+            outputs/release/*/*.dmg
+            outputs/release/*/*.zip
+            outputs/release/*/*.tar.gz
+            outputs/release/*/SHA256SUMS
+            outputs/release/*/validation.json
+          if-no-files-found: error

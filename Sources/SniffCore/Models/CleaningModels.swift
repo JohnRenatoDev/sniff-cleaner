@@ -103,6 +103,7 @@ public struct RemovalOutcome: Codable, Identifiable, Sendable {
     public var removed: Bool
     public var message: String
     public var allocatedBytes: Int64
+    public var partiallyRemoved: Bool? = nil
 }
 
 public struct CleaningReport: Codable, Sendable {
@@ -114,6 +115,7 @@ public struct CleaningReport: Codable, Sendable {
         guard let availableBefore, let availableAfter else { return nil }
         return availableAfter - availableBefore
     }
-    public var removedAllocated: Int64 { outcomes.filter(\.removed).reduce(0) { $0 + $1.allocatedBytes } }
+    public var removedAllocated: Int64 { outcomes.filter { $0.removed || $0.partiallyRemoved == true }.reduce(0) { $0 + $1.allocatedBytes } }
+    public var partialCount: Int { outcomes.filter { $0.partiallyRemoved == true }.count }
     public init() {}
 }

@@ -2,11 +2,14 @@ import Foundation
 
 public struct Scanner: Sendable {
     public let catalog: RuleCatalog
-    public init(catalog: RuleCatalog = .init()) { self.catalog = catalog }
+    private let captureProcesses: @Sendable () -> ProcessInventory
+    public init(catalog: RuleCatalog = .init(), captureProcesses: @escaping @Sendable () -> ProcessInventory = ProcessInventory.capture) {
+        self.catalog = catalog; self.captureProcesses = captureProcesses
+    }
     public func scan(preferences: Preferences, deep: Bool = true, progress: @Sendable (String) -> Void = { _ in }) throws -> ScanSnapshot {
         var snapshot = ScanSnapshot()
         progress("Verificando processos em uso…")
-        let processes = ProcessInventory.capture()
+        let processes = captureProcesses()
         if !processes.complete { snapshot.notices.append("O Sniff não conseguiu verificar todos os processos e preservou os arquivos.") }
         for rule in catalog.rules {
             try Task.checkCancellation()
@@ -69,20 +72,12 @@ public struct Scanner: Sendable {
                     finding.state = .protected; finding.reason = "O item teve alterações nos últimos \(days) dias e foi preservado."; return finding
                 }
             }
-            if rule.category == .npx && containsMCP(path) {
-                finding.state = .protected; finding.reason = "Este ambiente contém um pacote MCP. O Sniff o preserva mesmo sem um servidor visível em execução."
+            if rule.category == .npx && NpxPolicy.mustPreserve(path) {
+                finding.state = .protected; finding.reason = "Ambiente npx com MCP ou conteúdo não verificável. Item preservado."
             }
             if rule.category == .claudeVM { finding.reason = "Você precisa selecionar esta imagem manualmente. O Claude pode reinstalá-la e vai reconstruir a VM no próximo uso." }
         } catch { finding.state = .inaccessible; finding.reason = error.localizedDescription; finding.manifest = [] }
         return finding
-    }
-    private func containsMCP(_ path: String) -> Bool {
-        let lock = URL(fileURLWithPath: path + "/package-lock.json")
-        if let data = try? Data(contentsOf: lock), data.count < 8_000_000, let text = String(data: data, encoding: .utf8) {
-            return text.localizedCaseInsensitiveContains("mcp") || text.contains("@modelcontextprotocol")
-        }
-        // An unrecognized npx environment cannot be proven disposable.
-        return true
     }
 }
 

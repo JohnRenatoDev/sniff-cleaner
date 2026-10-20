@@ -22,12 +22,13 @@ final class AppStore: ObservableObject {
     private let disk = StateStore()
     private var work: Task<Void, Never>?
     init() {
-        state = disk.load()
+        state = PersistedState()
+        do { state = try disk.loadValidated() } catch { self.error = error.localizedDescription }
         if state.preferences.projectRoots.isEmpty {
             let code = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Code").path
             if FileManager.default.fileExists(atPath: code), state.lastScan == nil { state.preferences.projectRoots = [code] }
         }
-        if let lock = try? disk.lock() { try? disk.save(state); withExtendedLifetime(lock) {} }
+        if error == nil, let lock = try? disk.lock() { try? disk.save(state); withExtendedLifetime(lock) {} }
         applyExclusions()
         refreshSchedule()
     }
@@ -43,7 +44,7 @@ final class AppStore: ObservableObject {
             case .docker: sectionMatches = item.category == .docker
             case .schedule, .history: sectionMatches = false
             }
-            return sectionMatches && (search.isEmpty || item.title.localizedCaseInsensitiveContains(search) || item.path.localizedCaseInsensitiveContains(search) || item.category.title.localizedCaseInsensitiveContains(search))
+            return sectionMatches && (search.isEmpty || L(item.title).localizedCaseInsensitiveContains(search) || item.path.localizedCaseInsensitiveContains(search) || L(item.category.title).localizedCaseInsensitiveContains(search))
         }
     }
     var plan: [Finding] { findings.filter { selected.contains($0.id) && $0.state == .ready && state.preferences.enabledCategories.contains($0.category) } }
@@ -69,7 +70,8 @@ final class AppStore: ObservableObject {
     func refresh() {
         guard !busy else { return }
         language = LanguagePreference.load()
-        state = disk.load(); applyExclusions(); refreshSchedule()
+        do { state = try disk.loadValidated(); applyExclusions(); refreshSchedule() }
+        catch { self.error = error.localizedDescription }
     }
     func setLanguage(_ language: AppLanguage) {
         LanguagePreference.save(language)
@@ -79,13 +81,14 @@ final class AppStore: ObservableObject {
     func scan() {
         guard !busy else { return }
         busy = true; canCancel = true; activity = "Começando a farejar…"; selected.removeAll(); error = nil
-        let preferences = state.preferences; let disk = disk
+        let disk = disk
         work = Task { [self] in
             do {
                 let background = Task.detached(priority: .utility) { [weak self] in
                     let lock = try disk.lock(); defer { withExtendedLifetime(lock) {} }
-                    let result = try Scanner().scan(preferences: preferences) { message in Task { @MainActor in self?.activity = message } }
-                    var latest = disk.load(); latest.preferences = preferences; latest.lastScan = result
+                    var latest = try disk.loadValidated()
+                    let result = try Scanner().scan(preferences: latest.preferences) { message in Task { @MainActor in self?.activity = message } }
+                    latest.lastScan = result
                     try disk.save(latest)
                     return result
                 }
@@ -99,16 +102,15 @@ final class AppStore: ObservableObject {
     }
     func cleanReviewedPlan() {
         guard !busy, let scan = state.lastScan, !plan.isEmpty else { return }
-        let approved = plan; let preferences = state.preferences; let disk = disk
+        let approved = plan; let disk = disk
         reviewing = false; busy = true; activity = "Conferindo os itens escolhidos antes de remover…"; error = nil
         work = Task { [self] in
             do {
                 let report = try await Task.detached(priority: .utility) { [weak self] in
                     let lock = try disk.lock(); defer { withExtendedLifetime(lock) {} }
-                    let result = CleaningExecutor().execute(plan: approved, scannedAt: scan.date, preferences: preferences) { message in Task { @MainActor in self?.activity = message } }
-                    var latest = disk.load(); latest.history.insert(result, at: 0); latest.history = Array(latest.history.prefix(30))
-                    let removed = Set(result.outcomes.filter(\.removed).map(\.path))
-                    latest.lastScan?.findings.removeAll { removed.contains($0.path) }
+                    var latest = try disk.loadValidated()
+                    let result = CleaningExecutor().execute(plan: approved, scannedAt: scan.date, preferences: latest.preferences) { message in Task { @MainActor in self?.activity = message } }
+                    latest.apply(result)
                     try disk.save(latest)
                     return result
                 }.value

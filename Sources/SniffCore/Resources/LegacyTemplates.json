@@ -17,6 +17,7 @@
   "Item não está mais disponível: {0}",
   "Limpando {0}…",
   "Limpeza agendada: {0} itens removidos. Consulte o histórico.",
+  "Limpeza parcial. Alguns arquivos foram removidos; analise novamente. {0}",
   "Não foi possível ler: {0} ({1})",
   "O executável tem {0} hardlinks. A soma dos tamanhos pode incluir blocos compartilhados.",
   "O item teve alterações nos últimos {0} dias e foi preservado.",

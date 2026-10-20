@@ -15,7 +15,11 @@ if p.parent==Path('/private/tmp') and p.name.startswith('sniff-scheduler-test.')
 PY
 }
 trap cleanup EXIT
-/usr/bin/python3 - "$PWD/.build/debug/SniffScheduler" "$TASK_DIR" "$LABEL" <<'PY'
+BIN_DIR="$(swift build --build-system native --scratch-path work/app-build --show-bin-path)"
+if [ ! -x "$BIN_DIR/SniffScheduler" ]; then
+    swift build --build-system native --disable-sandbox --scratch-path work/app-build --product SniffScheduler -j 4
+fi
+/usr/bin/python3 - "$BIN_DIR/SniffScheduler" "$TASK_DIR" "$LABEL" <<'PY'
 import plistlib,sys,shutil
 from pathlib import Path
 binary,root,label=sys.argv[1:]
