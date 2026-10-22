@@ -186,9 +186,59 @@ pub fn load_state(dirs: &Dirs) -> Result<crate::model::PersistedState, StoreErro
     }))
 }
 
+/// Manifests of the last scan's candidates, kept apart from `state.json` so
+/// listing and status stay fast. Only `plan` needs them.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ManifestBundle {
+    pub scan_date: i64,
+    pub manifests: std::collections::BTreeMap<String, crate::fsx::Manifest>,
+}
+
+impl Dirs {
+    pub fn manifests_file(&self) -> PathBuf {
+        self.state.join("scan-manifests.json")
+    }
+}
+
+/// Loads the state and reattaches manifests recorded for the same scan.
+/// Manifests from another scan are ignored, leaving items unplannable.
+pub fn load_state_with_manifests(dirs: &Dirs) -> Result<crate::model::PersistedState, StoreError> {
+    let mut state = load_state(dirs)?;
+    let Some(scan) = state.last_scan.as_mut() else {
+        return Ok(state);
+    };
+    let bundle: Option<ManifestBundle> = read_json(&dirs.manifests_file())?;
+    if let Some(mut b) = bundle.filter(|b| b.scan_date == scan.date) {
+        for f in &mut scan.findings {
+            if let Some(m) = b.manifests.remove(&f.path) {
+                f.manifest = m;
+            }
+        }
+    }
+    Ok(state)
+}
+
+/// Saves the state. Manifests in the last scan go to the manifest bundle; the
+/// bundle is rewritten only when the scan carries manifests (a fresh scan),
+/// so saving a reloaded state never discards them.
 pub fn save_state(dirs: &Dirs, state: &crate::model::PersistedState) -> Result<(), StoreError> {
     ensure_private_dir(&dirs.state)?;
-    save_validated(&dirs.history_file(), state)
+    let mut slim = state.clone();
+    if let Some(scan) = slim.last_scan.as_mut() {
+        let mut bundle = ManifestBundle {
+            scan_date: scan.date,
+            ..Default::default()
+        };
+        for f in &mut scan.findings {
+            if !f.manifest.entries.is_empty() {
+                bundle.manifests.insert(f.path.clone(), std::mem::take(&mut f.manifest));
+            }
+        }
+        if !bundle.manifests.is_empty() {
+            save_validated(&dirs.manifests_file(), &bundle)?;
+        }
+    }
+    save_validated(&dirs.history_file(), &slim)
 }
 
 /// Exclusive advisory lock shared by the plugin, CLI and scheduler. Released

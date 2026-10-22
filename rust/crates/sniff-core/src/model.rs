@@ -205,7 +205,7 @@ pub struct WorktreeRemovalContext {
 
 impl PartialEq for Manifest {
     fn eq(&self, other: &Self) -> bool {
-        self.partial == other.partial && self.entries == other.entries
+        self.partial == other.partial && self.mount_id == other.mount_id && self.entries == other.entries
     }
 }
 impl Eq for Manifest {}
@@ -257,6 +257,10 @@ pub struct Finding {
     pub reason: Msg,
     pub logical_bytes: u64,
     pub allocated_bytes: u64,
+    /// Allocated bytes not shared with files outside the item: the space
+    /// removal is expected to free.
+    #[serde(default)]
+    pub exclusive_bytes: u64,
     /// Files with more than one hardlink; removal may free less space.
     pub shared_links: bool,
     /// Sizes are a lower bound; the walk stopped early.

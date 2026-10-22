@@ -508,3 +508,58 @@ fn stat_settings_cannot_hide_same_size_edits() {
         .unwrap();
     assert_eq!(r.status(), WorktreeStatus::LocalChanges);
 }
+
+fn admin_of(r: &Repo) -> PathBuf {
+    r.main
+        .join(".git/worktrees")
+        .read_dir()
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path()
+}
+
+#[test]
+fn known_codex_and_git_metadata_is_accepted_only_in_exact_form() {
+    let accept: &[(&str, &str)] = &[
+        ("codex-thread.json", r#"{"version":1,"ownerThreadId":"019a-thread"}"#),
+        ("config.worktree", "[codex]\n\tlocalEnvironmentConfigPath = __none__\n"),
+        ("MERGE_RR", ""),
+        ("FETCH_HEAD", "04a7b5e6e0978ba4055d8ee09416a3a47843ef7a\t\tbranch 'main' of https://example.invalid/repo\nfb26159235f39a78db1b246680824d867bf3cf2c\tnot-for-merge\tbranch 'x'\n"),
+    ];
+    let r = repo("knownmeta");
+    for (name, body) in accept {
+        fs::write(admin_of(&r).join(name), body).unwrap();
+    }
+    r.age();
+    let f = r.item();
+    assert_eq!(f.state, FindingState::Ready, "{:?} {:?}", f.reason, f.details);
+    assert_eq!(f.details.iter().filter(|d| d.k == "detail.known_metadata").count(), 4);
+
+    let r = repo("emptyfetch");
+    fs::write(admin_of(&r).join("FETCH_HEAD"), "").unwrap();
+    r.age();
+    assert_eq!(r.item().state, FindingState::Ready);
+
+    let reject: &[(&str, &str)] = &[
+        (
+            "codex-thread.json",
+            r#"{"version":1,"ownerThreadId":"x","notes":"local"}"#,
+        ),
+        (
+            "config.worktree",
+            "[codex]\n\tlocalEnvironmentConfigPath = __none__\n[core]\n\tsparseCheckout = true\n",
+        ),
+        ("config.worktree", "[include]\n\tpath = /tmp/other\n"),
+        ("MERGE_RR", "conflict-id\tpath\n"),
+        ("FETCH_HEAD", "x"),
+        ("custom-state", "anything"),
+    ];
+    for (name, body) in reject {
+        let r = repo("unknownmeta");
+        fs::write(admin_of(&r).join(name), body).unwrap();
+        r.age();
+        assert_eq!(r.status(), WorktreeStatus::LocalData, "{name}: {body}");
+    }
+}

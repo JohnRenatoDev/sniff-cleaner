@@ -27,7 +27,10 @@ It does not run `sudo`, register the scheduler, scan or clean. Without
 If `~/.local/bin` is not on `PATH`, set the widget's *sniff command* setting
 to the full path.
 
-Run the script again to update both the binary and the plugin.
+Run the script again to update both the binary and the plugin. Omarchy's
+hot reload refreshes only the widget's entry file; the panel files are cached
+until the shell restarts, so pass `--restart-shell` (or run
+`omarchy restart shell`) after an update.
 
 ### With `omarchy plugin add`
 
@@ -70,6 +73,17 @@ sniff schedule disable
 `status` reads `systemctl --user show`, so a saved setting alone is never
 reported as working. The user manager must be running (you must be logged in
 unless lingering is enabled).
+
+## Try the panel without real data
+
+```sh
+./script/linux/panel_fixture.sh setup    # sample caches in a temporary home; widget uses them
+# open the widget: scan, select, review, confirm, check History
+./script/linux/panel_fixture.sh restore  # widget back to the real sniff
+```
+
+`setup` only changes the widget's `sniffBinary` setting (`omarchy bar set`);
+the fixture folder is left in `$TMPDIR` for you to delete.
 
 ## Verify
 

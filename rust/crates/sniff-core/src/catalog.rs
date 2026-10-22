@@ -132,6 +132,22 @@ pub const PROTECTED_RELATIVE: &[&str] = &[
     ".cache/codex-runtimes/codex-primary-runtime",
 ];
 
+/// Commands that write npm's content cache. Long-running `npm exec`/`npx`
+/// processes (MCP servers) are not listed: once started they do not use the
+/// cache, and files they hold open are still caught by the open-file check.
+/// A concurrent install that writes during removal changes the manifest and
+/// stops the removal.
+pub const NPM_CACHE_TOKENS: &[&str] = &[
+    "npm install",
+    "npm i ",
+    "npm ci",
+    "npm cache",
+    "npm update",
+    "npm rebuild",
+    "npm pack",
+    "npm publish",
+];
+
 pub const BUILD_TOKENS: &[&str] = &["cargo build", "cargo test", "rustc", "swift-frontend", "swift build"];
 
 /// Command fragments that mean a build is in progress (scheduler deferral).
@@ -193,7 +209,7 @@ impl Catalog {
                 category: Category::Npm,
                 base: npm_cache.join("_cacache"),
                 layout: Layout::Whole,
-                tokens: &["npm install", "npm ci", "npm exec", "npm cache"],
+                tokens: NPM_CACHE_TOKENS,
                 source: format!("{npm_src}/_cacache"),
             },
             Rule {

@@ -27,3 +27,17 @@ jobs:
             outputs/release/*/SHA256SUMS
             outputs/release/*/validation.json
           if-no-files-found: error
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: ["1.88", stable]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Toolchain
+        run: |
+          rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component rustfmt,clippy
+          rustup default ${{ matrix.toolchain }}
+          cargo --version
+      - name: Rust checks (fmt, clippy, tests with fixtures)
+        run: ./script/linux/test.sh

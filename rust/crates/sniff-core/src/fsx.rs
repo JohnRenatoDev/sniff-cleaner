@@ -128,7 +128,16 @@ pub struct Manifest {
     /// Inodes whose links reach outside the candidate (link count larger
     /// than the links seen here). Removing them does not free their blocks.
     pub externally_linked_files: u64,
+    /// Allocated bytes of inodes with no link outside the candidate: what
+    /// removal can actually free.
+    #[serde(default)]
+    pub exclusive_allocated_bytes: u64,
     pub newest_mtime_ns: i64,
+    /// Mount ID of the root (`statx` `STATX_MNT_ID`). Every entry must share
+    /// it; a bind mount inside the candidate has a different one even on the
+    /// same device.
+    #[serde(default)]
+    pub mount_id: Option<u64>,
 }
 
 impl Manifest {
@@ -173,6 +182,19 @@ fn map_errno(e: Errno, at: &Path) -> OpenError {
         Errno::ACCESS | Errno::PERM => OpenError::Denied,
         other => OpenError::Other(other),
     }
+}
+
+/// Mount ID of an entry (`name` relative to `dir`, or `dir` itself when
+/// `name` is empty). `None` when the kernel cannot report it.
+pub fn mount_id<Fd: AsFd>(dir: Fd, name: &CStr) -> Option<u64> {
+    use rustix::fs::{statx, StatxFlags};
+    let flags = if name.is_empty() {
+        AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW
+    } else {
+        AtFlags::SYMLINK_NOFOLLOW
+    };
+    let sx = statx(dir, name, flags, StatxFlags::MNT_ID).ok()?;
+    (sx.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(sx.stx_mnt_id)
 }
 
 fn dir_flags() -> OFlags {
@@ -237,6 +259,9 @@ impl Default for WalkOptions {
     }
 }
 
+/// (dev, ino) -> (link count, links seen inside, allocated bytes)
+type LinkCounts = std::collections::HashMap<(u64, u64), (u64, u64, u64)>;
+
 struct Frame {
     dir: Dir,
     prefix: String,
@@ -252,8 +277,14 @@ pub fn build_manifest(path: &Path, opts: &WalkOptions) -> Result<Manifest, OpenE
     let root_stat = rustix::fs::fstat(&root_fd).map_err(OpenError::Other)?;
     let mut m = Manifest::default();
     let mut seen_inodes: HashSet<(u64, u64)> = HashSet::new();
-    let mut link_counts: std::collections::HashMap<(u64, u64), (u64, u64)> = Default::default();
+    let mut link_counts: LinkCounts = Default::default();
     record(&mut m, String::new(), &root_stat, &mut seen_inodes, &mut link_counts);
+    let root_mount = mount_id(&root_fd, c"");
+    m.mount_id = root_mount;
+    if root_mount.is_none() && opts.stop_at_dev_change {
+        m.partial = Some(PartialReason::CrossesFilesystem);
+        return Ok(m);
+    }
 
     let dir = match Dir::read_from(&root_fd) {
         Ok(d) => d,
@@ -321,7 +352,10 @@ pub fn build_manifest(path: &Path, opts: &WalkOptions) -> Result<Manifest, OpenE
             format!("{}/{}", frame.prefix, name_str)
         };
         let kind = EntryKind::from_stat(&st);
-        if kind == EntryKind::Dir && opts.stop_at_dev_change && st.st_dev != root_stat.st_dev {
+        if opts.stop_at_dev_change
+            && ((kind == EntryKind::Dir && st.st_dev != root_stat.st_dev)
+                || (matches!(kind, EntryKind::Dir | EntryKind::File) && mount_id(parent_fd, name) != root_mount))
+        {
             m.partial = Some(PartialReason::CrossesFilesystem);
             break;
         }
@@ -364,24 +398,20 @@ pub fn build_manifest(path: &Path, opts: &WalkOptions) -> Result<Manifest, OpenE
             }
         }
     }
-    for ((_, _), (nlink, seen)) in link_counts {
+    m.exclusive_allocated_bytes = m.allocated_bytes;
+    for ((_, _), (nlink, seen, allocated)) in link_counts {
         if nlink > 1 {
             m.hardlinked_files += 1;
             if nlink > seen {
                 m.externally_linked_files += 1;
+                m.exclusive_allocated_bytes = m.exclusive_allocated_bytes.saturating_sub(allocated);
             }
         }
     }
     Ok(m)
 }
 
-fn record(
-    m: &mut Manifest,
-    rel: String,
-    st: &Stat,
-    seen: &mut HashSet<(u64, u64)>,
-    links: &mut std::collections::HashMap<(u64, u64), (u64, u64)>,
-) {
+fn record(m: &mut Manifest, rel: String, st: &Stat, seen: &mut HashSet<(u64, u64)>, links: &mut LinkCounts) {
     let id = Identity::from_stat(st);
     let key = (id.dev, id.ino);
     let allocated = (st.st_blocks as u64).saturating_mul(512);
@@ -392,7 +422,7 @@ fn record(
         m.allocated_bytes += allocated;
     }
     if id.kind == EntryKind::File {
-        let e = links.entry(key).or_insert((id.nlink, 0));
+        let e = links.entry(key).or_insert((id.nlink, 0, allocated));
         e.1 += 1;
     }
     if id.mtime_ns > m.newest_mtime_ns {
@@ -466,6 +496,9 @@ pub fn verify_manifest(path: &Path, manifest: &Manifest) -> Option<RemovalStop> 
 }
 
 pub fn compare_manifests(expected: &Manifest, current: &Manifest) -> Option<RemovalStop> {
+    if expected.mount_id != current.mount_id {
+        return Some(RemovalStop::Changed { path: String::new() });
+    }
     let mut by_path: std::collections::HashMap<&str, &ManifestEntry> =
         current.entries.iter().map(|e| (e.path.as_str(), e)).collect();
     for e in &expected.entries {
@@ -541,11 +574,25 @@ pub fn remove_manifest_with_hook(
             return report;
         }
     }
+    let root_mount = mount_id(&root_fd, c"");
+    if root_mount.is_none() || (manifest.mount_id.is_some() && manifest.mount_id != root_mount) {
+        report.stopped = Some(RemovalStop::Changed { path: String::new() });
+        return report;
+    }
 
     let expected: std::collections::HashMap<&str, &ManifestEntry> =
         manifest.entries.iter().map(|e| (e.path.as_str(), e)).collect();
     let mut removed_inodes: HashSet<(u64, u64)> = HashSet::new();
-    if let Err(stop) = remove_children(&root_fd, "", &expected, last, &mut report, &mut removed_inodes, hook) {
+    if let Err(stop) = remove_children(
+        &root_fd,
+        root_mount,
+        "",
+        &expected,
+        last,
+        &mut report,
+        &mut removed_inodes,
+        hook,
+    ) {
         report.stopped = Some(stop);
         return report;
     }
@@ -587,8 +634,10 @@ pub fn remove_manifest_with_hook(
     report
 }
 
+#[allow(clippy::too_many_arguments)]
 fn remove_children(
     dir_fd: &OwnedFd,
+    mount: Option<u64>,
     prefix: &str,
     expected: &std::collections::HashMap<&str, &ManifestEntry>,
     last: Option<&str>,
@@ -644,10 +693,12 @@ fn remove_children(
             let child = openat(dir_fd, name.as_c_str(), dir_flags(), Mode::empty())
                 .map_err(|_| RemovalStop::Changed { path: rel.clone() })?;
             let cst = rustix::fs::fstat(&child).map_err(|_| RemovalStop::Changed { path: rel.clone() })?;
-            if cst.st_ino != entry.id.ino || cst.st_dev != entry.id.dev {
+            // A bind mount placed after the scan has another mount ID even
+            // on the same device: never descend into it.
+            if cst.st_ino != entry.id.ino || cst.st_dev != entry.id.dev || mount_id(&child, c"") != mount {
                 return Err(RemovalStop::Changed { path: rel });
             }
-            remove_children(&child, &rel, expected, None, report, removed, hook)?;
+            remove_children(&child, mount, &rel, expected, None, report, removed, hook)?;
         }
         remove_one(dir_fd, name_str, &rel, entry, report, removed, hook)?;
     }

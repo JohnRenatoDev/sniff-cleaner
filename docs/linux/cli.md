@@ -78,6 +78,10 @@ setting and what systemd says about the timer.
 - Identifiers (`category`, `state`, `worktree.status`) are stable across
   languages; titles, reasons and details are localized.
 - Dates are UTC RFC 3339.
+- Sizes per item: `logicalBytes`, `allocatedBytes` (estimate) and
+  `freeableBytes` (allocation not shared through hardlinks outside the item).
+  Cleanup reports add `estimatedFreedBytes` and the measured
+  `netFreeSpaceChange`.
 - Errors with `--json`: `{"error": "…", "errorKey": "…", "exitCode": n}`.
 
 | Exit code | Meaning |
@@ -93,7 +97,8 @@ setting and what systemd says about the timer.
 | Path | Contents |
 | --- | --- |
 | `$XDG_CONFIG_HOME/sniff/settings.json` | Settings (0600) |
-| `$XDG_STATE_HOME/sniff/state.json` | Last scan with manifests, history, scheduler state (0600) |
+| `$XDG_STATE_HOME/sniff/state.json` | Last scan summary, history, scheduler state (0600) |
+| `$XDG_STATE_HOME/sniff/scan-manifests.json` | File manifests of the last scan's candidates, read only by `plan` (0600) |
 | `$XDG_STATE_HOME/sniff/sniff.lock` | Lock shared by the plugin, CLI and scheduler |
 | `$XDG_STATE_HOME/sniff/plans/` | Plans saved by the plugin |
 

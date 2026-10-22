@@ -144,6 +144,10 @@ impl<'a> Scanner<'a> {
                 if m.partial.is_some() {
                     notices.push(Msg::new("notice.logs_partial").arg(to_string(base)));
                 }
+                // Logs still inside the retention period are summarized in
+                // one row per rule: they cannot be selected, and listing each file only
+                // adds noise. Everything else stays one item per file.
+                let mut recent: std::collections::BTreeMap<PathBuf, (u64, u64, u64)> = Default::default();
                 for e in &m.entries {
                     if e.id.kind != fsx::EntryKind::File {
                         continue;
@@ -154,8 +158,27 @@ impl<'a> Scanner<'a> {
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default();
-                        out.push(self.inspect_file(&p, rule, Msg::new("title.plain").arg(name)));
+                        let f = self.inspect_file(&p, rule, Msg::new("title.plain").arg(name));
+                        if f.state == FindingState::Protected && f.reason.k == "reason.recent" {
+                            let g = recent.entry(base.to_path_buf()).or_default();
+                            g.0 += 1;
+                            g.1 += f.logical_bytes;
+                            g.2 += f.allocated_bytes;
+                        } else {
+                            out.push(f);
+                        }
                     }
+                }
+                for (dir, (count, logical, allocated)) in recent {
+                    let mut f =
+                        self.base_finding(&dir, rule.id, rule.category, Msg::new("title.recent_logs").arg(count));
+                    f.rule_id = format!("{}-recent", rule.id);
+                    f.state = FindingState::Protected;
+                    f.reason = Msg::new("reason.recent").arg(self.prefs.log_retention_days);
+                    f.logical_bytes = logical;
+                    f.allocated_bytes = allocated;
+                    f.exclusive_bytes = allocated;
+                    out.push(f);
                 }
             }
         }
@@ -171,6 +194,7 @@ impl<'a> Scanner<'a> {
             reason: Msg::new("reason.rule_ready"),
             logical_bytes: 0,
             allocated_bytes: 0,
+            exclusive_bytes: 0,
             shared_links: false,
             partial_measurement: false,
             details: Vec::new(),
@@ -215,6 +239,7 @@ impl<'a> Scanner<'a> {
         };
         f.logical_bytes = manifest.logical_bytes;
         f.allocated_bytes = manifest.allocated_bytes;
+        f.exclusive_bytes = manifest.exclusive_allocated_bytes;
         f.shared_links = manifest.hardlinked_files > 0;
         if manifest.externally_linked_files > 0 {
             f.details
@@ -372,7 +397,12 @@ pub fn measure(path: &Path, limit: usize) -> Result<Manifest, OpenError> {
     } else {
         let id = fsx::Identity::from_stat(&st);
         let allocated = (st.st_blocks as u64).saturating_mul(512);
+        let mount_id = fsx::open_parent_nofollow(path)
+            .ok()
+            .and_then(|(parent, name)| fsx::mount_id(&parent, name.as_c_str()));
         Ok(Manifest {
+            exclusive_allocated_bytes: if id.nlink > 1 { 0 } else { allocated },
+            mount_id,
             logical_bytes: if id.kind == fsx::EntryKind::File { id.size } else { 0 },
             allocated_bytes: allocated,
             hardlinked_files: u64::from(id.nlink > 1),
@@ -468,6 +498,7 @@ pub fn inspect_docker() -> Vec<Finding> {
         reason,
         logical_bytes: 0,
         allocated_bytes: 0,
+        exclusive_bytes: 0,
         shared_links: false,
         partial_measurement: true,
         details: vec![Msg::new("detail.docker_inspect_only")],

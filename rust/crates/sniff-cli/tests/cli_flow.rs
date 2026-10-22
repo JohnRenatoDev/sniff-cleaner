@@ -349,3 +349,96 @@ fn foreign_home_and_expired_plans_are_rejected() {
     assert_eq!(code, 2);
     assert!(h.home.join(".npm/_cacache/a").exists());
 }
+
+#[test]
+fn state_stays_small_and_plans_reattach_manifests() {
+    let h = home("slimstate");
+    for i in 0..300 {
+        h.write(&format!(".npm/_cacache/content/{i}"), "x");
+    }
+    h.json(&["scan", "--quick", "--json"]);
+    let state = fs::read_to_string(h.home.join(".local/state/sniff/state.json")).unwrap();
+    assert!(!state.contains("\"ino\""), "manifests must not be in state.json");
+    assert!(h.home.join(".local/state/sniff/scan-manifests.json").exists());
+    let plan = h.root.join("p.json");
+    let (code, _) = h.json(&[
+        "plan",
+        "--category",
+        "npm",
+        "--output",
+        plan.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(code, 0);
+    let doc = fs::read_to_string(&plan).unwrap();
+    assert!(doc.contains("\"ino\""), "plan carries the manifest");
+    let (code, r) = h.json(&["clean", "--plan", plan.to_str().unwrap(), "--yes", "--json"]);
+    assert_eq!(code, 0, "{r}");
+}
+
+/// Runs a script inside new user, mount and PID namespaces (no root needed)
+/// so a bind mount can be placed inside a fixture cache.
+fn in_namespace(h: &Home, script: &str) -> Option<Output> {
+    let probe = Command::new("unshare")
+        .args(["-rm", "--pid", "--fork", "--mount-proc", "true"])
+        .status()
+        .ok()?;
+    if !probe.success() {
+        eprintln!("skipping: unprivileged user namespaces unavailable");
+        return None;
+    }
+    // The script runs from a file: a command line naming the cache path
+    // would itself (correctly) mark the cache as in use.
+    let file = h.root.join("ns-script.sh");
+    fs::write(&file, script).unwrap();
+    Some(
+        Command::new("unshare")
+            .args(["-rm", "--pid", "--fork", "--mount-proc", "sh", "-e"])
+            .arg(&file)
+            .env("SNIFF_HOME", &h.home)
+            .env("SNIFF", env!("CARGO_BIN_EXE_sniff"))
+            .env("LANG", "en_US.UTF-8")
+            .output()
+            .unwrap(),
+    )
+}
+
+#[test]
+fn bind_mounts_inside_candidates_are_never_traversed() {
+    let h = home("bindmount");
+    h.write(".npm/_cacache/a", "x");
+    fs::create_dir_all(h.home.join(".npm/_cacache/inner")).unwrap();
+    let precious = h.root.join("outside/precious.txt");
+    fs::create_dir_all(precious.parent().unwrap()).unwrap();
+    fs::write(&precious, "keep").unwrap();
+    let cache = h.home.join(".npm/_cacache");
+    let plan = h.root.join("p.json");
+    let report = h.root.join("r.json");
+    let scanout = h.root.join("s.json");
+    // 1. Mounted before the scan: the item is not ready.
+    // 2. Mounted after planning: cleanup keeps the item; nothing outside is touched.
+    let script = format!(
+        "mount --bind '{out}' '{inner}'\n\"$SNIFF\" scan --quick --json > '{scan}'\numount '{inner}'\n\
+         \"$SNIFF\" scan --quick --json > /dev/null\n\"$SNIFF\" plan --category npm --output '{plan}' --json > /dev/null\n\
+         mount --bind '{out}' '{inner}'\n\"$SNIFF\" clean --plan '{plan}' --yes --json > '{report}' || true\n",
+        out = precious.parent().unwrap().display(),
+        inner = cache.join("inner").display(),
+        scan = scanout.display(),
+        plan = plan.display(),
+        report = report.display(),
+    );
+    let Some(out) = in_namespace(&h, &script) else { return };
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let scan: Value = serde_json::from_slice(&fs::read(&scanout).unwrap()).unwrap();
+    let npm = scan["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["category"] == "npm")
+        .unwrap();
+    assert_ne!(npm["state"], "ready", "{npm}");
+    let r: Value = serde_json::from_slice(&fs::read(&report).unwrap()).unwrap();
+    assert_eq!(r["outcomes"][0]["removed"], false, "{r}");
+    assert_eq!(fs::read_to_string(&precious).unwrap(), "keep");
+    assert!(cache.join("a").exists());
+}

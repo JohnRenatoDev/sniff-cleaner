@@ -4,10 +4,11 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import "Format.js" as Format
 
-// Sniff panel: scan, review, select, plan, confirm and clean. Every decision
-// is made by the `sniff` binary (Rust core); this file only presents its JSON
-// and passes the user's explicit choices back as argv.
+// Sniff panel controller: state, CLI calls and keyboard. Every decision is
+// made by the `sniff` binary (Rust core); the panes only present its JSON
+// and pass the user's explicit choices back as argv.
 Panel {
   id: root
   moduleName: "io.github.johnrenatodev.sniff"
@@ -25,18 +26,24 @@ Panel {
 
   // Data from the CLI.
   property var strings: ({})
+  property string lang: "en"
   property var scanData: null
   property var prefs: null
+  property var categories: []
   property var planData: null
   property var resultData: null
+  property var historyData: []
+  property var scheduleData: null
   property string errorText: ""
   property string statusText: ""
   property bool binaryMissing: false
 
   // UI state.
-  property string view: "list"          // list | review | result
-  property string busyKind: ""          // scan | plan | clean | ""
+  property string tab: "cleanup"        // cleanup | history | settings
+  property string view: "list"          // list | review | result (cleanup tab)
+  property string busyKind: ""          // scan | plan | clean | config | schedule
   readonly property bool busy: busyKind !== ""
+  readonly property bool working: busyKind === "scan" || busyKind === "plan" || busyKind === "clean"
   property string filter: "all"
   property string search: ""
   property var selected: ({})
@@ -68,40 +75,32 @@ Panel {
     var list = scanData && scanData.items ? scanData.items : []
     return list.filter(function(it) { return root.selected[it.path] === true })
   }
+  // Space expected to be freed: shared (hardlinked) blocks are not counted.
   readonly property real selectedBytes: {
     var sum = 0
-    for (var i = 0; i < selectedItems.length; i++) sum += Number(selectedItems[i].allocatedBytes) || 0
+    for (var i = 0; i < selectedItems.length; i++) sum += Number(selectedItems[i].freeableBytes) || 0
     return sum
   }
-  readonly property string barTooltip: busy ? tr("ui.sniffing") : tr("ui.tagline")
+  readonly property string barTooltip: working ? tr("ui.sniffing") : tr("ui.tagline")
 
-  function tr(key, args) {
-    var s = strings[key] !== undefined ? String(strings[key]) : key
-    if (args) for (var i = 0; i < args.length; i++) s = s.split("{" + i + "}").join(String(args[i]))
-    return s
-  }
+  function tr(key, args) { return Format.fill(strings[key] !== undefined ? strings[key] : key, args) }
+  function bytes(n) { return Format.bytes(n, lang) }
+  function signedBytes(n) { return Format.signedBytes(n, lang) }
+  function time(iso) { return Format.localTime(iso, lang) }
+  function langArgs() { return language === "auto" ? [] : ["--language", language] }
+  function enabled(category) { return prefs && prefs.enabledCategories ? prefs.enabledCategories.indexOf(category) >= 0 : false }
+  function selectable(it) { return it && it.state === "ready" && enabled(it.category) }
+  function focusKeys() { keyCatcher.forceActiveFocus() }
 
-  function bytes(n) {
-    n = Number(n) || 0
-    var units = ["B", "KB", "MB", "GB", "TB"]
-    var u = 0
-    while (n >= 1024 && u < units.length - 1) { n /= 1024; u++ }
-    var s = u === 0 ? String(Math.round(n)) : (n >= 100 ? n.toFixed(0) : n.toFixed(1))
-    var lang = strings["__lang"] || "en"
-    if (lang !== "en") s = s.replace(".", ",")
-    return s + " " + units[u]
-  }
+  readonly property color fg: Commons.Color.popups.text
+  readonly property color dim: Qt.darker(fg, 1.5)
+  readonly property color accentColor: Commons.Color.accent
+  readonly property color urgentColor: Commons.Color.urgent
 
-  function langArgs() {
-    return language === "auto" ? [] : ["--language", language]
-  }
-
-  function enabled(category) {
-    return prefs && prefs.enabledCategories ? prefs.enabledCategories.indexOf(category) >= 0 : false
-  }
-
-  function selectable(it) {
-    return it && it.state === "ready" && enabled(it.category)
+  function stateColor(state) {
+    if (state === "ready") return accentColor
+    if (state === "in_use" || state === "inaccessible") return urgentColor
+    return dim
   }
 
   // --- lifecycle ------------------------------------------------------------
@@ -109,9 +108,12 @@ Panel {
   function open() {
     root.controller.show()
     errorText = ""
-    if (!stringsCall.running) stringsCall.start([binary, "strings", "--json"].concat(langArgs()))
-    loadPrefs()
-    if (!busy && view === "list") listCall.start([binary, "list", "--json"].concat(langArgs()))
+    run(stringsCall, ["strings", "--json"])
+    run(categoriesCall, ["categories", "--json"])
+    refreshPrefs()
+    if (!working && view === "list") run(listCall, ["list", "--json"])
+    if (tab === "history") run(historyCall, ["history", "--json"])
+    if (tab === "settings") run(scheduleStatusCall, ["schedule", "status", "--json"])
     hyprCall.running = true
   }
 
@@ -123,8 +125,13 @@ Panel {
     return false
   }
 
-  function loadPrefs() {
-    if (!configCall.running) configCall.start([binary, "config", "--json"].concat(langArgs()))
+  function run(call, args) { return call.start([binary].concat(args).concat(langArgs())) }
+  function refreshPrefs() { run(configCall, ["config", "--json"]) }
+
+  function showTab(name) {
+    tab = name
+    if (name === "history") run(historyCall, ["history", "--json"])
+    if (name === "settings") { refreshPrefs(); run(scheduleStatusCall, ["schedule", "status", "--json"]) }
   }
 
   // --- actions --------------------------------------------------------------
@@ -133,13 +140,15 @@ Panel {
     if (busy) return
     errorText = ""
     statusText = tr("ui.sniffing")
-    var argv = [binary, "scan", "--json", "--progress"]
-    if (mode === "quick") argv.push("--quick")
-    if (mode === "worktrees") argv.push("--worktrees")
+    var args = ["scan", "--json", "--progress"]
+    if (mode === "quick") args.push("--quick")
+    if (mode === "worktrees") args.push("--worktrees")
     busyKind = "scan"
+    tab = "cleanup"
+    view = "list"
     selected = ({})
     selectionVersion++
-    if (!scanCall.start(argv.concat(langArgs()))) busyKind = ""
+    if (!run(scanCall, args)) busyKind = ""
   }
 
   function toggleSelect(it) {
@@ -152,28 +161,32 @@ Panel {
 
   function review() {
     if (busy || selectedItems.length === 0) return
-    var argv = [binary, "plan", "--json", "--save"]
-    for (var i = 0; i < selectedItems.length; i++) argv.push("--path", selectedItems[i].path)
+    var args = ["plan", "--json", "--save"]
+    for (var i = 0; i < selectedItems.length; i++) args.push("--path", selectedItems[i].path)
     errorText = ""
     busyKind = "plan"
-    if (!planCall.start(argv.concat(langArgs()))) busyKind = ""
+    if (!run(planCall, args)) busyKind = ""
   }
 
   function confirmClean() {
     if (busy || !planData || !planData.planFile) return
     busyKind = "clean"
     statusText = tr("ui.cleaning")
-    if (!cleanCall.start([binary, "clean", "--plan", planData.planFile, "--yes", "--json"].concat(langArgs()))) busyKind = ""
+    if (!run(cleanCall, ["clean", "--plan", planData.planFile, "--yes", "--json"])) busyKind = ""
   }
 
-  function exclude(path) {
+  property bool lastConfigExcluded: false
+  function config(args) {
     if (busy) return
-    excludeCall.start([binary, "config", "--exclude", path, "--json"].concat(langArgs()))
+    busyKind = "config"
+    lastConfigExcluded = args.indexOf("--exclude") >= 0
+    if (!run(configChangeCall, ["config"].concat(args).concat(["--json"]))) busyKind = ""
   }
 
-  function enableCategory(category) {
+  function schedule(args) {
     if (busy) return
-    excludeCall.start([binary, "config", "--enable", category, "--json"].concat(langArgs()))
+    busyKind = "schedule"
+    if (!run(scheduleCall, ["schedule"].concat(args).concat(["--json"]))) busyKind = ""
   }
 
   function cycleFilter() {
@@ -187,27 +200,24 @@ Panel {
     return tr("ui.error", [String(code)])
   }
 
-  // --- CLI calls --------------------------------------------------------------
+  // --- CLI calls ------------------------------------------------------------
 
   CliCall {
     id: stringsCall
     onFinished: function(code, data) {
       if (code === 0 && data && data.strings) {
-        var s = data.strings
-        s["__lang"] = data.language
-        root.strings = s
+        root.strings = data.strings
+        root.lang = data.language || "en"
         root.binaryMissing = false
       } else if (code === 127) {
         root.binaryMissing = true
       }
     }
   }
-
-  CliCall {
-    id: configCall
-    onFinished: function(code, data) { if (code === 0 && data) root.prefs = data }
-  }
-
+  CliCall { id: categoriesCall; onFinished: function(code, data) { if (code === 0 && data) root.categories = data.categories } }
+  CliCall { id: configCall; onFinished: function(code, data) { if (code === 0 && data) root.prefs = data } }
+  CliCall { id: historyCall; onFinished: function(code, data) { if (code === 0 && data) root.historyData = data } }
+  CliCall { id: scheduleStatusCall; onFinished: function(code, data) { if (code === 0 && data) root.scheduleData = data } }
   CliCall {
     id: listCall
     onFinished: function(code, data) {
@@ -215,7 +225,6 @@ Panel {
       else if (code === 127) root.binaryMissing = true
     }
   }
-
   CliCall {
     id: scanCall
     onProgress: function(text) { root.statusText = text }
@@ -226,7 +235,6 @@ Panel {
       else root.errorText = root.failMessage(code, data)
     }
   }
-
   CliCall {
     id: planCall
     onFinished: function(code, data) {
@@ -235,7 +243,6 @@ Panel {
       else root.errorText = root.failMessage(code, data)
     }
   }
-
   CliCall {
     id: cleanCall
     onFinished: function(code, data) {
@@ -246,18 +253,26 @@ Panel {
         root.view = "result"
         root.selected = ({})
         root.selectionVersion++
-        listCall.start([root.binary, "list", "--json"].concat(root.langArgs()))
+        root.run(listCall, ["list", "--json"])
       } else {
         root.errorText = root.failMessage(code, data)
         root.view = "list"
       }
     }
   }
-
   CliCall {
-    id: excludeCall
+    id: configChangeCall
     onFinished: function(code, data) {
-      if (code === 0 && data) { root.prefs = data; root.statusText = root.tr("ui.excluded") }
+      root.busyKind = ""
+      if (code === 0 && data) { root.prefs = data; root.statusText = root.lastConfigExcluded ? root.tr("ui.excluded") : "" }
+      else root.errorText = root.failMessage(code, data)
+    }
+  }
+  CliCall {
+    id: scheduleCall
+    onFinished: function(code, data) {
+      root.busyKind = ""
+      if (code === 0 && data) root.scheduleData = data
       else root.errorText = root.failMessage(code, data)
     }
   }
@@ -276,17 +291,6 @@ Panel {
 
   // --- view -----------------------------------------------------------------
 
-  readonly property color fg: Commons.Color.popups.text
-  readonly property color dim: Qt.darker(fg, 1.5)
-  readonly property color accentColor: Commons.Color.accent
-  readonly property color urgentColor: Commons.Color.urgent
-
-  function stateColor(state) {
-    if (state === "ready") return accentColor
-    if (state === "in_use" || state === "inaccessible") return urgentColor
-    return dim
-  }
-
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -294,29 +298,34 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(620))
-    contentHeight: panel.fittedContentHeight(Style.space(560))
+    contentWidth: panel.fittedContentWidth(Style.space(640))
+    contentHeight: panel.fittedContentHeight(content.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: searchField.activeFocus
+      blocked: listPane.searchField.activeFocus || settingsPane.editing
       property bool enterPressed: false
       onCloseRequested: {
-        if (root.view !== "list" && !root.busy) root.view = "list"
+        if (root.tab === "cleanup" && root.view !== "list" && !root.busy) root.view = "list"
         else root.close()
       }
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onMoveRequested: function(dx, dy) {
-        if (root.view !== "list") return
+        if (root.tab === "settings") {
+          settingsPane.contentY = Math.max(0, Math.min(settingsPane.contentHeight - settingsPane.height, settingsPane.contentY + dy * Style.space(40)))
+          return
+        }
+        if (root.tab !== "cleanup" || root.view !== "list") return
         if (dx !== 0) { root.cycleFilter(); return }
         root.cursor = Math.max(0, Math.min(root.items.length - 1, root.cursor + dy))
-        list.positionViewAtIndex(root.cursor, ListView.Contain)
+        listPane.list.positionViewAtIndex(root.cursor, ListView.Contain)
       }
       onReturnRequested: enterPressed = true
       onActivateRequested: {
         var wasEnter = enterPressed
         enterPressed = false
+        if (root.tab !== "cleanup") return
         if (root.view === "review") { if (wasEnter) root.confirmClean(); return }
         if (root.view === "result") { root.view = "list"; return }
         var it = root.items[root.cursor]
@@ -325,21 +334,24 @@ Panel {
         else root.toggleSelect(it)
       }
       onTextKey: function(t) {
-        if (root.view !== "list") return
+        if (t === "1") root.showTab("cleanup")
+        else if (t === "2") root.showTab("history")
+        else if (t === "3") root.showTab("settings")
+        if (root.tab !== "cleanup" || root.view !== "list") return
         if (t === "r") root.scan("quick")
         else if (t === "R") root.scan("full")
         else if (t === "w") root.scan("worktrees")
         else if (t === "f") root.cycleFilter()
-        else if (t === "/") searchField.forceActiveFocus()
+        else if (t === "/") listPane.searchField.forceActiveFocus()
         else if (t === "p") root.review()
       }
 
       Column {
         id: content
-        anchors.fill: parent
+        width: parent.width
         spacing: Style.spacing.rowGap
 
-        // Header: the dog moves only while the CLI is working.
+        // Header: the dog moves only while a scan, plan or cleanup runs.
         Row {
           width: parent.width
           spacing: Style.spacing.panelGap
@@ -347,35 +359,26 @@ Panel {
             width: Style.space(96)
             height: Style.space(59)
             ink: root.fg
-            active: root.busy
+            active: root.working
             reduceMotion: root.reduceMotion
           }
           Column {
             width: parent.width - Style.space(96) - Style.spacing.panelGap
             spacing: Style.spacing.xs
-            Text {
-              text: root.tr("ui.title")
-              color: root.fg
-              font.family: Style.font.family
-              font.pixelSize: Style.font.heading
-              font.bold: true
-            }
-            Text {
+            Label { text: root.tr("ui.title"); font.pixelSize: Style.font.heading; font.bold: true }
+            Label {
               width: parent.width
-              wrapMode: Text.WordWrap
-              color: root.dim
-              font.family: Style.font.family
+              muted: true
               font.pixelSize: Style.font.bodySmall
               text: root.binaryMissing ? root.tr("ui.binary_missing")
-                : root.busy ? (root.statusText || root.tr("ui.sniffing"))
+                : root.working ? (root.statusText || root.tr("ui.sniffing"))
                 : root.errorText !== "" ? root.errorText
                 : root.statusText !== "" ? root.statusText
-                : root.scanData ? root.tr("ui.last_scan", [String(root.scanData.scannedAt).replace("T", " ").replace("Z", " UTC")])
+                : root.scanData ? root.tr("ui.last_scan", [root.time(root.scanData.scannedAt)])
                 : root.tr("ui.idle_hint")
             }
             Row {
               spacing: Style.spacing.controlGap
-              visible: root.view === "list"
               Button { text: root.tr("ui.scan_quick"); enabled: !root.busy; onClicked: root.scan("quick") }
               Button { text: root.tr("ui.scan_full"); enabled: !root.busy; onClicked: root.scan("full") }
               Button { text: root.tr("ui.scan_worktrees"); enabled: !root.busy; onClicked: root.scan("worktrees") }
@@ -383,331 +386,32 @@ Panel {
           }
         }
 
+        Row {
+          spacing: Style.spacing.sm
+          Repeater {
+            model: ["cleanup", "history", "settings"]
+            delegate: Button {
+              required property string modelData
+              text: root.tr("ui.tab_" + modelData)
+              selected: root.tab === modelData
+              onClicked: root.showTab(modelData)
+            }
+          }
+        }
+
         PanelSeparator { width: parent.width; foreground: root.fg }
 
-        // --- list view ---
-        Column {
+        ListPane { id: listPane; panel: root; width: parent.width; visible: root.tab === "cleanup" && root.view === "list" }
+        ReviewPane { panel: root; width: parent.width; visible: root.tab === "cleanup" && root.view === "review" }
+        ResultPane { panel: root; width: parent.width; visible: root.tab === "cleanup" && root.view === "result" }
+        HistoryPane { panel: root; width: parent.width; visible: root.tab === "history" }
+        SettingsPane { id: settingsPane; panel: root; width: parent.width; visible: root.tab === "settings" }
+
+        Label {
           width: parent.width
-          spacing: Style.spacing.rowGap
-          visible: root.view === "list"
-
-          Row {
-            spacing: Style.spacing.sm
-            Repeater {
-              model: root.filters
-              delegate: Button {
-                required property string modelData
-                text: root.tr("ui.filter_" + modelData.replace("-", "_"))
-                selected: root.filter === modelData
-                onClicked: { root.filter = modelData; root.cursor = 0 }
-              }
-            }
-          }
-
-          TextField {
-            id: searchField
-            width: parent.width
-            placeholderText: root.tr("ui.search")
-            onTextChanged: { root.search = text; root.cursor = 0 }
-            Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-            Keys.onReturnPressed: keyCatcher.forceActiveFocus()
-          }
-
-          ListView {
-            id: list
-            width: parent.width
-            height: Style.space(300)
-            clip: true
-            model: root.items
-            boundsBehavior: Flickable.StopAtBounds
-            currentIndex: root.cursor
-            spacing: Style.spacing.xs
-
-            Text {
-              anchors.centerIn: parent
-              visible: list.count === 0
-              color: root.dim
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              text: root.scanData ? root.tr("ui.empty") : root.tr("ui.idle_hint")
-            }
-
-            delegate: Rectangle {
-              id: row
-              required property var modelData
-              required property int index
-              readonly property bool isCursor: index === root.cursor
-              readonly property bool isSelected: root.selectionVersion >= 0 && root.selected[modelData.path] === true
-              readonly property bool expanded: root.expandedPath === modelData.path
-              width: list.width
-              height: rowColumn.implicitHeight + Style.spacing.md * 2
-              color: isCursor ? Style.hoverFill : "transparent"
-              radius: Style.cornerRadius
-
-              Accessible.role: Accessible.CheckBox
-              Accessible.name: modelData.title + ", " + modelData.stateTitle + ", " + modelData.path
-              Accessible.checkable: root.selectable(modelData)
-              Accessible.checked: isSelected
-
-              MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: function(mouse) {
-                  root.cursor = row.index
-                  if (mouse.button === Qt.RightButton) root.expandedPath = row.expanded ? "" : row.modelData.path
-                  else root.toggleSelect(row.modelData)
-                }
-              }
-
-              Column {
-                id: rowColumn
-                x: Style.spacing.md
-                y: Style.spacing.md
-                width: parent.width - Style.spacing.md * 2
-                spacing: Style.spacing.xxs
-
-                Row {
-                  width: parent.width
-                  spacing: Style.spacing.md
-                  Text {
-                    id: check
-                    text: !root.selectable(row.modelData) ? "·" : (row.isSelected ? "[x]" : "[ ]")
-                    color: root.selectable(row.modelData) ? root.fg : root.dim
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-                  Text {
-                    width: parent.width - check.width - size.width - stateLabel.width - Style.spacing.md * 3
-                    elide: Text.ElideRight
-                    text: row.modelData.title
-                    color: root.fg
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    font.bold: true
-                  }
-                  Text {
-                    id: size
-                    text: row.modelData.partialMeasurement ? root.tr("ui.partial_size", [root.bytes(row.modelData.allocatedBytes)]) : root.bytes(row.modelData.allocatedBytes)
-                    color: root.fg
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                  }
-                  Text {
-                    id: stateLabel
-                    text: row.modelData.worktree ? row.modelData.worktree.statusTitle : row.modelData.stateTitle
-                    color: root.stateColor(row.modelData.state)
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                  }
-                }
-                Text {
-                  width: parent.width
-                  elide: Text.ElideMiddle
-                  text: row.modelData.path + (row.modelData.worktree && row.modelData.worktree.branch ? "  ·  " + row.modelData.worktree.branch : "")
-                  color: root.dim
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-                Text {
-                  width: parent.width
-                  wrapMode: Text.WordWrap
-                  text: row.modelData.reason
-                  color: root.dim
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-                Column {
-                  visible: row.expanded
-                  width: parent.width
-                  spacing: Style.spacing.xxs
-                  Text {
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                    color: root.dim
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    text: root.tr("ui.measures", [root.bytes(row.modelData.logicalBytes), root.bytes(row.modelData.allocatedBytes)])
-                  }
-                  Repeater {
-                    model: row.expanded ? row.modelData.details : []
-                    delegate: Text {
-                      required property string modelData
-                      width: rowColumn.width
-                      wrapMode: Text.WordWrap
-                      text: "· " + modelData
-                      color: root.dim
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                    }
-                  }
-                  Row {
-                    spacing: Style.spacing.controlGap
-                    Button {
-                      visible: row.modelData.path.indexOf("docker://") !== 0
-                      text: root.tr("ui.exclude")
-                      onClicked: root.exclude(row.modelData.path)
-                    }
-                    Button {
-                      visible: row.modelData.state === "ready" && !root.enabled(row.modelData.category) && row.modelData.category !== "docker"
-                      text: root.tr("ui.enable_category", [row.modelData.categoryTitle])
-                      onClicked: root.enableCategory(row.modelData.category)
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.spacing.controlGap
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              width: parent.width - reviewButton.width - Style.spacing.controlGap
-              text: root.tr("ui.selected", [String(root.selectedItems.length), root.bytes(root.selectedBytes)])
-              color: root.fg
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-            }
-            Button {
-              id: reviewButton
-              text: root.tr("ui.review")
-              enabled: !root.busy && root.selectedItems.length > 0
-              onClicked: root.review()
-            }
-          }
-
-          Text {
-            width: parent.width
-            wrapMode: Text.WordWrap
-            text: root.tr("ui.keys")
-            color: root.dim
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-        }
-
-        // --- review view ---
-        Column {
-          width: parent.width
-          spacing: Style.spacing.rowGap
-          visible: root.view === "review"
-
-          Text {
-            text: root.tr("ui.review_title")
-            color: root.fg
-            font.family: Style.font.family
-            font.pixelSize: Style.font.title
-            font.bold: true
-          }
-          Text {
-            width: parent.width
-            wrapMode: Text.WordWrap
-            text: root.tr("ui.review_body")
-            color: root.fg
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-          }
-          Text {
-            text: root.planData ? root.tr("ui.expires", [String(root.planData.expiresAt).replace("T", " ").replace("Z", " UTC")]) : ""
-            color: root.dim
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-          ListView {
-            width: parent.width
-            height: Style.space(260)
-            clip: true
-            model: root.planData ? root.planData.items : []
-            delegate: Column {
-              required property var modelData
-              width: ListView.view.width
-              bottomPadding: Style.spacing.sm
-              Text {
-                width: parent.width
-                wrapMode: Text.WrapAnywhere
-                text: root.bytes(modelData.allocatedBytes) + "  " + modelData.path
-                color: root.fg
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-              }
-              Text {
-                visible: modelData.category === "worktree"
-                width: parent.width
-                wrapMode: Text.WordWrap
-                text: root.tr("detail.no_backup")
-                color: root.urgentColor
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-            }
-          }
-          Row {
-            spacing: Style.spacing.controlGap
-            Button { text: root.tr("ui.cancel"); enabled: !root.busy; onClicked: root.view = "list" }
-            Button {
-              text: root.busy ? root.tr("ui.cleaning") : root.tr("ui.confirm")
-              enabled: !root.busy
-              foreground: root.urgentColor
-              onClicked: root.confirmClean()
-            }
-          }
-        }
-
-        // --- result view ---
-        Column {
-          width: parent.width
-          spacing: Style.spacing.rowGap
-          visible: root.view === "result"
-
-          Text {
-            text: root.tr("ui.result")
-            color: root.fg
-            font.family: Style.font.family
-            font.pixelSize: Style.font.title
-            font.bold: true
-          }
-          Text {
-            width: parent.width
-            wrapMode: Text.WordWrap
-            color: root.fg
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            text: {
-              if (!root.resultData) return ""
-              var net = root.resultData.netFreeSpaceChange
-              var measured = net === null || net === undefined ? "—" : ((net >= 0 ? "+" : "−") + root.bytes(Math.abs(net)))
-              return root.tr("ui.result_summary", [root.bytes(root.resultData.estimatedFreedBytes), measured])
-            }
-          }
-          ListView {
-            width: parent.width
-            height: Style.space(280)
-            clip: true
-            model: root.resultData ? root.resultData.outcomes : []
-            delegate: Column {
-              required property var modelData
-              width: ListView.view.width
-              bottomPadding: Style.spacing.sm
-              Text {
-                width: parent.width
-                wrapMode: Text.WrapAnywhere
-                text: (modelData.removed ? "✓ " : (modelData.partiallyRemoved ? "◐ " : "• ")) + modelData.path
-                color: modelData.removed ? root.fg : root.urgentColor
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-              }
-              Text {
-                width: parent.width
-                wrapMode: Text.WordWrap
-                text: modelData.message
-                color: root.dim
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-            }
-          }
-          Button { text: root.tr("ui.done"); onClicked: root.view = "list" }
+          muted: true
+          font.pixelSize: Style.font.caption
+          text: root.tr("ui.keys")
         }
       }
     }

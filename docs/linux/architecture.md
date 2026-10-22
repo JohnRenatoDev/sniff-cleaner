@@ -9,6 +9,12 @@ rust/                      Cargo workspace
   crates/sniff-core/       library: rules, scanning, worktrees, plans, removal, state
   crates/sniff-cli/        `sniff` binary (CLI and the plugin's backend)
 omarchy/                   QML frontend loaded by omarchy-shell
+  BarWidget.qml            bar button; loads Panel.qml
+  Panel.qml                state, CLI calls, keyboard
+  ListPane / ReviewPane / ResultPane / HistoryPane / SettingsPane.qml
+  CliCall.qml              one `sniff` invocation (argv, JSON, exit code)
+  SniffDog.qml, DogMotion.js  the dachshund and its motion (port of SniffIdentity)
+  Format.js, Label.qml     sizes, local dates, text style
 manifest.json              Omarchy plugin manifest (repository root, as Omarchy requires)
 script/omarchy_install.sh  build + install for the current user
 script/omarchy_uninstall.sh
@@ -64,7 +70,8 @@ entry limits instead of concurrency.
 
 1. `sniff scan` captures a process inventory, applies the catalog, discovers
    projects and worktrees, and saves the scan (with manifests of ready items)
-   to `$XDG_STATE_HOME/sniff/state.json`.
+   to `$XDG_STATE_HOME/sniff/state.json`, with file manifests in
+   `scan-manifests.json` so listing stays fast.
 2. `sniff list` and the panel read that scan.
 3. `sniff plan --path … --save` (panel) or `--output <file>` (CLI) writes a
    private plan containing the selected findings and their manifests.

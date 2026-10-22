@@ -369,6 +369,7 @@ impl<'a> WorktreeInspector<'a> {
             reason: Msg::new("wt.unverified_generic"),
             logical_bytes: 0,
             allocated_bytes: 0,
+            exclusive_bytes: 0,
             shared_links: false,
             partial_measurement: false,
             details: Vec::new(),
@@ -398,6 +399,7 @@ impl<'a> WorktreeInspector<'a> {
             if let Some(m) = bounded_measurement(&path, 3_000) {
                 r.logical_bytes = m.logical_bytes;
                 r.allocated_bytes = m.allocated_bytes;
+                r.exclusive_bytes = m.exclusive_allocated_bytes;
                 r.shared_links = m.hardlinked_files > 0;
                 r.partial_measurement = m.partial.is_some();
             }
@@ -471,14 +473,21 @@ impl<'a> WorktreeInspector<'a> {
                 S::Protected,
             ));
         }
-        // Anything else (FETCH_HEAD, config.worktree, per-worktree refs) is
-        // local data that only this worktree holds.
-        let extra: Vec<&str> = admin_manifest
-            .entries
-            .iter()
-            .map(|e| e.path.as_str())
-            .filter(|p| !METADATA_FILES.contains(p))
-            .collect();
+        // Files Codex and Git add to every worktree are accepted only in
+        // their exact known form; anything else (per-worktree refs, other
+        // config keys, conflict state) is local data only this worktree holds.
+        let mut extra: Vec<&str> = Vec::new();
+        for e in &admin_manifest.entries {
+            let p = e.path.as_str();
+            if METADATA_FILES.contains(&p) {
+                continue;
+            }
+            if e.id.kind == EntryKind::File && known_auxiliary(&admin, p) {
+                item.details.push(Msg::new("detail.known_metadata").arg(p));
+            } else {
+                extra.push(p);
+            }
+        }
         item.details
             .extend(extra.iter().take(4).map(|p| Msg::new("detail.local_metadata").arg(p)));
 
@@ -729,6 +738,7 @@ impl<'a> WorktreeInspector<'a> {
         }
         item.logical_bytes = manifest.logical_bytes;
         item.allocated_bytes = manifest.allocated_bytes;
+        item.exclusive_bytes = manifest.exclusive_allocated_bytes;
         item.shared_links = manifest.hardlinked_files > 0;
         item.manifest = manifest;
         item.state = FindingState::Ready;
@@ -865,6 +875,52 @@ fn administrative_dir(path: &Path, repository: &Path, common: &Path) -> Result<P
         return Err(GitError);
     }
     Ok(admin)
+}
+
+/// Auxiliary administrative files with a verified, harmless form:
+/// - `codex-thread.json`: Codex's owner marker, only `version` and
+///   `ownerThreadId` scalars;
+/// - `config.worktree`: only Codex's `[codex] localEnvironmentConfigPath`;
+/// - `MERGE_RR`: empty (no rerere conflict in progress);
+/// - `FETCH_HEAD`: empty, or only fetched object IDs from a remote.
+pub fn known_auxiliary(admin: &Path, name: &str) -> bool {
+    let read = |limit| bounded_text(&admin.join(name), limit).ok();
+    match name {
+        "codex-thread.json" => read(4096)
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|v| v.as_object().cloned())
+            .is_some_and(|o| {
+                !o.is_empty()
+                    && o.iter()
+                        .all(|(k, v)| (k == "version" || k == "ownerThreadId") && (v.is_string() || v.is_number()))
+            }),
+        "config.worktree" => read(4096).is_some_and(|t| {
+            let mut section = String::new();
+            t.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with(';'))
+                .all(|l| {
+                    if l.starts_with('[') {
+                        section = l.to_ascii_lowercase();
+                        return section == "[codex]";
+                    }
+                    let key = l.split('=').next().unwrap_or("").trim().to_ascii_lowercase();
+                    section == "[codex]" && key == "localenvironmentconfigpath"
+                })
+        }),
+        "MERGE_RR" => read(0).is_some_and(|t| t.is_empty()),
+        "FETCH_HEAD" => read(256 * 1024).is_some_and(|t| {
+            t.lines().all(|l| {
+                let mut parts = l.splitn(3, '\t');
+                let oid = parts.next().unwrap_or("");
+                let flag = parts.next();
+                (oid.len() == 40 || oid.len() == 64)
+                    && oid.chars().all(|c| c.is_ascii_hexdigit())
+                    && matches!(flag, Some("") | Some("not-for-merge"))
+            })
+        }),
+        _ => false,
+    }
 }
 
 fn principal_reference(path: &Path, references: &[String]) -> Option<String> {

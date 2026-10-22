@@ -228,7 +228,7 @@ fn cmd_list(ctx: &Ctx, req: &Request) -> Result<u8, Failure> {
 
 fn cmd_plan(ctx: &Ctx, req: &Request) -> Result<u8, Failure> {
     let prefs = store::load_prefs(&ctx.dirs).map_err(store_failure)?;
-    let state = store::load_state(&ctx.dirs).map_err(store_failure)?;
+    let state = store::load_state_with_manifests(&ctx.dirs).map_err(store_failure)?;
     let now = store::now_secs();
     let findings = plan::select(
         state.last_scan.as_ref(),

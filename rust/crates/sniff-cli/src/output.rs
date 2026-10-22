@@ -40,6 +40,7 @@ impl Out {
             "reason": self.r(&f.reason),
             "allocatedBytes": f.allocated_bytes,
             "logicalBytes": f.logical_bytes,
+            "freeableBytes": f.exclusive_bytes,
             "partialMeasurement": f.partial_measurement,
             "sharedLinks": f.shared_links,
             "automaticAllowed": f.category.allows_automatic(),

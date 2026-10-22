@@ -10,6 +10,8 @@
 #   4. runs `omarchy plugin validate` on that folder and asks the running
 #      shell to rescan plugins
 #   5. with --enable, enables the bar widget (right section)
+#   6. with --restart-shell, restarts omarchy-shell: hot reload only refreshes
+#      the widget's entry file, so updated panel files load after a restart
 # It never runs sudo, never enables scheduling and never cleans anything.
 set -euo pipefail
 
@@ -19,11 +21,13 @@ BIN_DIR="$HOME/.local/bin"
 PLUGIN_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$ID"
 ENABLE=0
 FORCE_BIN=0
+RESTART=0
 for arg in "$@"; do
   case "$arg" in
     --enable) ENABLE=1 ;;
     --force-binary) FORCE_BIN=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --restart-shell) RESTART=1 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -57,6 +61,7 @@ if [[ -d $PLUGIN_DIR ]]; then
   [[ -f $PLUGIN_DIR/manifest.json ]] && grep -q "\"$ID\"" "$PLUGIN_DIR/manifest.json" \
     || { echo "$PLUGIN_DIR exists and is not this plugin; not touching it." >&2; exit 1; }
   rm -rf "$PLUGIN_DIR"
+  UPDATED=1
 fi
 mv "$STAGE" "$PLUGIN_DIR"
 trap - EXIT
@@ -70,6 +75,13 @@ if (( ENABLE )); then
     sleep 0.05
   done
   omarchy-plugin-enable "$ID" --section right
+fi
+
+if (( RESTART )); then
+  echo "==> Restarting omarchy-shell"
+  omarchy-restart-shell >/dev/null 2>&1 || true
+elif [[ -n ${UPDATED:-} ]]; then
+  echo "Updated an installed plugin: run 'omarchy restart shell' (or pass --restart-shell) to load the new panel."
 fi
 
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) echo "Note: $BIN_DIR is not on PATH; set the widget's 'sniff command' to $BIN_DIR/sniff." ;; esac

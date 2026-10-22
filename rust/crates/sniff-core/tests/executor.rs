@@ -219,6 +219,7 @@ fn forged_runtime_and_worktree_cannot_enter_executor() {
         reason: Msg::new("reason.rule_ready"),
         logical_bytes: 0,
         allocated_bytes: 0,
+        exclusive_bytes: 0,
         shared_links: false,
         partial_measurement: false,
         details: vec![],
@@ -451,4 +452,77 @@ fn plan_files_are_private_never_overwritten_and_refuse_symlinks_and_foreign_home
     assert!(sniff_core::plan::read_plan(&p, &fx.catalog().home, scan.date).is_ok());
     assert!(sniff_core::plan::read_plan(&p, Path::new("/nonexistent-home"), scan.date).is_err());
     assert!(sniff_core::plan::read_plan(&p, &fx.catalog().home, scan.date + 901).is_err());
+}
+
+#[test]
+fn aggressive_symlink_swaps_during_removal_never_reach_outside() {
+    for round in 0..8 {
+        let fx = Fixture::new(&format!("race{round}"));
+        let outside = fx.write("precious/data.txt", "keep me");
+        for i in 0..200 {
+            fx.write(&format!(".npm/_cacache/sub/f{i}"), "x");
+        }
+        fx.write(".npm/_cacache/other/a", "y");
+        let scan = fx.scan();
+        let f = fx.finding(&scan, &npm_cache(&fx));
+        let sub = npm_cache(&fx).join("sub");
+        let parked = fx.home.join("parked");
+        let target = outside.parent().unwrap().to_path_buf();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = stop.clone();
+        let (s2, p2, t2) = (sub.clone(), parked.clone(), target.clone());
+        let swapper = std::thread::spawn(move || {
+            while !flag.load(std::sync::atomic::Ordering::Relaxed) {
+                if fs::rename(&s2, &p2).is_ok() {
+                    let _ = symlink(&t2, &s2);
+                    std::thread::yield_now();
+                    let _ = fs::remove_file(&s2);
+                    let _ = fs::rename(&p2, &s2);
+                }
+            }
+        });
+        let _ = fx.clean(&[f], scan.date);
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        swapper.join().unwrap();
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me", "round {round}");
+    }
+}
+
+#[test]
+fn recent_logs_are_summarized_per_folder_and_old_ones_listed() {
+    let mut fx = Fixture::new("logs");
+    fx.prefs.enabled_categories.insert(Category::Logs);
+    for i in 0..5 {
+        fx.write(&format!(".cache/claude-cli-nodejs/proj/mcp-logs-x/{i}.jsonl"), "{}");
+        fx.write(&format!(".cache/claude-cli-nodejs/other/mcp-logs-z/{i}.jsonl"), "{}");
+    }
+    let old = fx.write(".cache/claude-cli-nodejs/proj/mcp-logs-y/old.jsonl", "{}");
+    age(&fx.home.join(".cache/claude-cli-nodejs/proj/mcp-logs-y"), 90);
+    fx.write(".cache/claude-cli-nodejs/proj/not-logs/skip.jsonl", "{}");
+    let scan = fx.scan();
+    let logs: Vec<_> = scan.findings.iter().filter(|f| f.category == Category::Logs).collect();
+    assert_eq!(logs.len(), 2, "{:?}", logs.iter().map(|f| &f.path).collect::<Vec<_>>());
+    let group = logs.iter().find(|f| f.title.k == "title.recent_logs").unwrap();
+    assert_eq!(group.state, FindingState::Protected);
+    assert!(group.manifest.entries.is_empty());
+    let ready = fx.finding(&scan, &old);
+    assert_eq!(ready.state, FindingState::Ready);
+    // A forged "ready" group is refused.
+    let mut forged = (*group).clone();
+    forged.state = FindingState::Ready;
+    forged.manifest = ready.manifest.clone();
+    let report = fx.clean(&[forged], scan.date);
+    assert!(!report.outcomes[0].removed);
+}
+
+#[test]
+fn exclusive_estimate_excludes_space_shared_outside() {
+    let fx = Fixture::new("exclusive");
+    let a = fx.write(".npm/_cacache/a", &"z".repeat(64 * 1024));
+    fs::hard_link(&a, fx.home.join("project-link")).unwrap();
+    fx.write(".npm/_cacache/b", &"q".repeat(64 * 1024));
+    let scan = fx.scan();
+    let f = fx.finding(&scan, &npm_cache(&fx));
+    assert!(f.manifest.exclusive_allocated_bytes < f.manifest.allocated_bytes);
+    assert!(f.manifest.exclusive_allocated_bytes >= 64 * 1024);
 }

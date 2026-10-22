@@ -16,7 +16,7 @@ not found.
 
 | Original rule (macOS) | Linux path recognized | Mode | Limitations |
 | --- | --- | --- | --- |
-| npm `~/.npm/_cacache` | `$npm_config_cache` or `~/.npm`, `/_cacache` | Automatic allowed | Kept while `npm install/ci/exec/cache` runs. |
+| npm `~/.npm/_cacache` | `$npm_config_cache` or `~/.npm`, `/_cacache` | Automatic allowed | Kept while `npm install`, `i`, `ci`, `cache`, `update`, `rebuild`, `pack` or `publish` runs, or a process has a file in it open. Long-running `npm exec`/`npx` processes (MCP servers) no longer block it: once started they do not use the cache. If a new `npx` writes to the cache during removal, the manifest no longer matches and removal stops (partial, recorded). |
 | npx `~/.npm/_npx/*` | same base, `/_npx/*` | Manual only | MCP environments, unreadable or symlinked lockfiles, active `npx` and items newer than the retention are preserved. |
 | uv `~/.cache/uv` | `$UV_CACHE_DIR` or `$XDG_CACHE_HOME/uv` | Automatic allowed | Interpreters and tools in `~/.local/share/uv` are not touched. |
 | Bun `~/.bun/install/cache` | `$BUN_INSTALL_CACHE_DIR`, `$BUN_INSTALL/install/cache` or `~/.bun/install/cache` | Automatic allowed | Not present on the test machine. |
@@ -31,7 +31,7 @@ not found.
 | Gradle `~/.gradle/caches/*` | `$GRADLE_USER_HOME/caches/*` | Automatic allowed | Not present on the test machine. |
 | Codex `~/.cache/codex-runtimes/codex-runtime-install-*` | `$XDG_CACHE_HOME/codex-runtimes/codex-runtime-install-*` | Automatic allowed | Verified on this machine (a temporary install with a `node-runtime.tar.xz`). `codex-primary-runtime` is protected. Retention applies. |
 | Codex logs `~/.codex/log/*.log` | same | Manual only (logs) | 30-day retention by default. |
-| Claude logs `Library/Logs/Claude` | `$XDG_CACHE_HOME/claude-cli-nodejs/*/mcp-logs-*/*.{jsonl,log,txt}` | Manual only (logs) | Only MCP log folders written by Claude Code; open logs are in use. Other Claude data (`~/.claude`, `~/.claude.json`) is protected. |
+| Claude logs `Library/Logs/Claude` | `$XDG_CACHE_HOME/claude-cli-nodejs/*/mcp-logs-*/*.{jsonl,log,txt}` | Manual only (logs) | Only MCP log folders written by Claude Code; open logs are in use. Logs inside the retention period are summarized in one row per rule. Other Claude data (`~/.claude`, `~/.claude.json`) is protected. |
 | Rust `target`, Swift `.build` | `<repo>/target` with `Cargo.toml`, `<repo>/.build` with `Package.swift`, inside configured project folders | Manual only (build) | Active `cargo`, `rustc`, `swift` keep them. |
 | Git worktrees | Registered linked worktrees (see below) | Manual only | Never automatic. |
 | Docker / OrbStack | `docker system df` | Inspection only | Read only when `docker.service` is already active. With socket activation the client would start the engine, so Sniff checks systemd first and never calls `docker` otherwise. No prune, no removal. Podman is not inspected. |
@@ -60,11 +60,18 @@ Sizes:
 
 - **Logical**: sum of regular file sizes.
 - **Allocated (estimate)**: `st_blocks × 512`, counted once per inode.
+- **Expected to free**: the allocated bytes of inodes with no hardlink
+  outside the item. The panel's selection total uses this figure.
 - **Measured free-space change**: `statvfs` before and after cleanup.
 
 On Btrfs (the default for Omarchy), reflinks, compression, subvolume
 snapshots and hardlinks can make the freed space differ from the estimate.
-A different subvolume inside a candidate stops the walk and preserves it.
+
+Every entry's mount ID (`statx` `STATX_MNT_ID`) must match the candidate
+root's, and every directory opened during removal is checked again. A
+subvolume, another filesystem or a bind mount inside a candidate (even of the
+same filesystem, which shares the device number) stops the walk and keeps the
+item. A kernel that cannot report mount IDs keeps every item.
 
 ## Process checks
 
@@ -106,6 +113,13 @@ the configured project folders and `~/.codex/worktrees` and
 (primary checkout) is never a candidate. Git runs with hooks, fsmonitor and
 untracked cache disabled, `protocol.allow=never`, and every configured
 `filter.*.clean`/`process` neutralized; it never fetches.
+
+Administrative files that Codex and Git add to every worktree are accepted
+only in their exact known form: `codex-thread.json` with just `version` and
+`ownerThreadId`, `config.worktree` with just `[codex]
+localEnvironmentConfigPath`, an empty `MERGE_RR`, and a `FETCH_HEAD` that is
+empty or lists only fetched object IDs. They appear as recognized metadata in
+the details. Any other content or file is local data.
 
 A worktree is preserved when it is locked, has a Git operation in progress,
 unknown or extra administrative metadata, submodules, hidden index flags,
