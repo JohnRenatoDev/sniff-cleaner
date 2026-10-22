@@ -4,6 +4,8 @@ Aplicativo macOS nativo, SwiftUI/SwiftPM, sem dependências externas. Nome públ
 
 - Use `./script/build_and_run.sh` para compilar, empacotar e abrir. O botão Run usa esse comando.
 - Testes: `./script/test.sh`; integração launchd: `./script/test_scheduler.sh`.
+- Linux/Omarchy: núcleo e CLI em `rust/` (`sniff-core`, `sniff-cli`), plugin em `omarchy/` + `manifest.json`. Testes: `./script/linux/test.sh`; agendador systemd em fixture: `./script/linux/test_scheduler.sh`; instalação: `./script/omarchy_install.sh`. Use `SNIFF_HOME` para fixtures da CLI.
+- No Rust, mantenha modelos, catálogo, scanner, worktrees, plano, executor, persistência, agendamento e apresentação em módulos separados; o QML só apresenta o JSON do `sniff`.
 - Nunca executar uma limpeza real para demonstrar ou testar o app. Usar fixtures em diretórios temporários exclusivos. Limpeza real depende da seleção e confirmação do usuário no app ou autorização delimitada.
 - Preserve sessões, fontes, configurações, credenciais, bancos, volumes, runtimes principais e worktrees por padrão.
 - Mantenha análise, plano revisável, revalidação e remoção separados. Sem comandos shell construídos com caminhos do usuário.

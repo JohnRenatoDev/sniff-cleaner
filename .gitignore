@@ -11,3 +11,6 @@ work/
 *.p8
 *.mobileprovision
 *.provisionprofile
+
+# Rust (Linux)
+rust/target/

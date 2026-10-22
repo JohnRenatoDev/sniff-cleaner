@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.johnrenatodev.sniff",
+  "name": "Sniff",
+  "version": "0.1.0",
+  "author": "JohnRenatoDev",
+  "license": "MIT",
+  "homepage": "https://github.com/JohnRenatoDev/sniff-cleaner",
+  "description": "Review and clean caches and leftovers from AI agents and dev tools, with local rules and no model calls. Needs the sniff binary from this repository.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "omarchy/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Sniff",
+    "description": "Scan, review and clean caches, temporary installs and Git worktrees. Nothing is removed without a reviewed plan and confirmation.",
+    "category": "System",
+    "aliases": ["sniff", "cleaner", "cache"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "sniffBinary": "sniff",
+      "language": "auto",
+      "reduceMotion": "auto"
+    },
+    "schema": [
+      { "key": "sniffBinary", "type": "string", "label": "sniff command", "description": "Executable used for scans and cleanup. Leave as sniff unless it is outside PATH.", "defaultValue": "sniff" },
+      { "key": "language", "type": "enum", "label": "Language", "options": ["auto", "en", "pt", "es"], "defaultValue": "auto" },
+      { "key": "reduceMotion", "type": "enum", "label": "Reduce motion", "description": "Auto follows Hyprland animations:enabled.", "options": ["auto", "on", "off"], "defaultValue": "auto" }
+    ]
+  }
+}

@@ -6,7 +6,7 @@ Sniff was built to automate the routine cleanup that comes with working with AI 
 
 Sniff handles that work locally, using explicit cleanup rules. It makes no model calls, needs no API key and consumes no AI tokens. You can review a cleanup yourself or schedule maintenance for the caches you choose, while keeping your projects and agent sessions intact.
 
-[Install](#install) · [Usage](#usage) · [Scheduling](#scheduling) · [CLI](#command-line) · [Technical details](#technical-details)
+[Install](#install) · [Usage](#usage) · [Scheduling](#scheduling) · [CLI](#command-line) · [Technical details](#technical-details) · [Linux and Omarchy](#linux-and-omarchy-preview)
 
 ![Sniff showing cache sizes and files kept in use](Resources/app-preview.png)
 
@@ -114,6 +114,18 @@ The script builds the Swift package, packages a locally signed app and opens it.
 Removal tests use isolated temporary fixtures. The scheduler test creates a temporary LaunchAgent, verifies that macOS starts it and removes the job afterward. It does not clean user data.
 
 Build universal release files with `./script/build_release.sh`. The [release instructions](docs/releases.md) cover DMG and CLI packaging, artifact validation, Developer ID signing and notarization.
+
+## Linux and Omarchy (preview)
+
+A Linux port runs as an [Omarchy](https://omarchy.org) bar widget backed by a Rust core and the same `sniff` command-line concepts. It lives in `rust/`, `omarchy/` and `manifest.json`; the macOS app above is unchanged.
+
+```sh
+./script/omarchy_install.sh --enable   # builds ~/.local/bin/sniff and installs the plugin
+sniff scan --quick
+./script/linux/test.sh                 # fmt, clippy, tests, plugin validation
+```
+
+Linux rules use XDG locations and each tool's documented environment variables, check usage through `/proc`, and keep the same plan, revalidation and worktree safeguards. Docker is read only while its service is already running. Categories that exist only on macOS (SwiftPM, Homebrew, updaters, Claude VM, signing copies) have no Linux rule. See [architecture](docs/linux/architecture.md), [cleaning policy and category table](docs/linux/cleaning-policy.md), [CLI](docs/linux/cli.md) and [install](docs/linux/install.md).
 
 ## License
 
