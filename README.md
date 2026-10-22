@@ -1,5 +1,8 @@
 # Sniff
 
+**Sniff (Finds AI slops)**
+A tool for vibe-coders and devs to clean the garbage left behind.
+
 A native macOS app for cleaning up after AI-assisted development. Licensed under [MIT](LICENSE).
 
 Sniff was built to automate the routine cleanup that comes with working with AI coding agents. Repeated package installs, temporary runtimes and build output can leave a lot behind. Keeping track of it all shouldn't become another job for you or your agent harness.
