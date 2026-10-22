@@ -33,7 +33,7 @@ struct PreferencesView: View {
                         if enabled { store.state.preferences.enabledCategories.insert(category) }
                         else { store.state.preferences.enabledCategories.remove(category); store.selected.subtract(store.findings.filter { $0.category == category }.map(\.id)) }
                         store.savePreferences()
-                    })).disabled([.worktree, .docker, .signingClone].contains(category))
+                    })).disabled([.docker, .signingClone].contains(category))
                     Text(L(category.regeneration)).font(.caption).foregroundStyle(.secondary)
                     Text(category.allowsAutomatic ? L("Pode entrar na limpeza automática se habilitada") : L("Fora da limpeza automática")).font(.caption2).foregroundStyle(.secondary)
                 }.padding(.vertical, 5)
@@ -66,14 +66,14 @@ struct PreferencesView: View {
     private var retention: some View {
         Form {
             Section(L("Itens antigos")) {
-                Stepper(L("Temporários, instaladores e npx: {0} dias", store.state.preferences.retentionDays), value: $store.state.preferences.retentionDays, in: 1...180)
+                Stepper(L("Temporários, instaladores, npx e worktrees: {0} dias", store.state.preferences.retentionDays), value: $store.state.preferences.retentionDays, in: 1...180)
                     .onChange(of: store.state.preferences.retentionDays) { _, _ in store.savePreferences() }
                 Stepper(L("Logs: {0} dias", store.state.preferences.logRetentionDays), value: $store.state.preferences.logRetentionDays, in: 7...365)
                     .onChange(of: store.state.preferences.logRetentionDays) { _, _ in store.savePreferences() }
                 Text(L("Se algum arquivo foi modificado dentro desse prazo, o Sniff preserva o item inteiro. Caches comuns podem ser recriados e não dependem desse prazo.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(L("Limites desta versão")) {
-                Text(L("Nesta versão, o Sniff só inspeciona worktrees, Docker e clones de assinatura. Nos projetos, reconhece apenas as pastas de compilação target do Rust e .build do SwiftPM."))
+                Text(L("Worktrees exigem análise e seleção manual. Docker e clones de assinatura ficam apenas para inspeção. Nos projetos, o Sniff reconhece as compilações target do Rust e .build do SwiftPM."))
                 Text(L("O Sniff limpa arquivos deixados pelas ferramentas. Isso não corrige vazamento de processos, concorrência do Codex ou kernel panic.")).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped)

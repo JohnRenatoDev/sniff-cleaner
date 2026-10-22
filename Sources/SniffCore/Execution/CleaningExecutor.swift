@@ -7,8 +7,8 @@ public struct CleaningExecutor: Sendable {
         self.catalog = catalog
         self.useCheck = useCheck ?? { finding in
             let inventory = ProcessInventory.capture()
-            let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"]
-            return inventory.reason(path: finding.path, tokens: tokens)
+            let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? (finding.category == .worktree ? [] : ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"])
+            return inventory.reason(path: finding.path, tokens: tokens, manifest: finding.manifest)
         }
     }
     public func execute(plan: [Finding], scannedAt: Date, preferences: Preferences, automatic: Bool = false, progress: @Sendable (String) -> Void = { _ in }) -> CleaningReport {
@@ -24,7 +24,7 @@ public struct CleaningExecutor: Sendable {
                 guard finding.state == .ready, !finding.manifest.isEmpty, catalog.validates(finding, preferences: preferences) else { throw SniffError.message("Item fora das regras de remoção reconhecidas.") }
                 guard preferences.enabledCategories.contains(finding.category), !automatic || finding.category.allowsAutomatic else { throw SniffError.message("Categoria não autorizada para esta limpeza.") }
                 guard !acceptedPaths.contains(where: { FileTree.contains($0, finding.path) || FileTree.contains(finding.path, $0) }) else { throw SniffError.message("Item duplicado ou contido em outro item do plano.") }
-                if let reason = catalog.protectedReason(finding.path, preferences: preferences) { throw SniffError.message(reason) }
+                if let reason = catalog.protectedReason(finding, preferences: preferences) { throw SniffError.message(reason) }
                 let current = try FileTree.read(finding.path)
                 guard current == finding.manifest else { throw SniffError.message("Conteúdo mudou desde a análise. Preservado; analise novamente.") }
                 if finding.category == .npx && NpxPolicy.mustPreserve(finding.path) {
@@ -36,10 +36,12 @@ public struct CleaningExecutor: Sendable {
                     guard !current.contains(where: { Double($0.stamp.modifiedSeconds) > cutoff }) else { throw SniffError.message("Retenção alterada ou item recente. Preservado.") }
                 }
                 if let reason = useCheck(finding) { throw SniffError.message(reason) }
+                if finding.category == .worktree { try WorktreeInspector.revalidate(finding, preferences: preferences, catalog: catalog) }
                 // Usage checks can take time. Revalidate again immediately before unlinking.
                 guard try FileTree.read(finding.path) == finding.manifest else { throw SniffError.message("Item mudou durante a verificação de uso. Preservado.") }
                 acceptedPaths.append(finding.path)
-                try SecureRemoval.remove(path: finding.path, manifest: finding.manifest)
+                if finding.category == .worktree { try WorktreeRemoval.remove(finding) }
+                else { try SecureRemoval.remove(path: finding.path, manifest: finding.manifest) }
                 outcome.removed = true; outcome.allocatedBytes = FileTree.sizes(current).allocated; outcome.message = "Removido após revalidação."
             } catch let partial as SecureRemoval.PartialFailure {
                 outcome.partiallyRemoved = true; outcome.allocatedBytes = partial.allocatedBytes

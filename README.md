@@ -21,9 +21,10 @@ Sniff recognizes specific cache and temporary-file locations. These can be used 
 | Package and build caches | npm, pnpm, uv, Bun, pip, node-gyp, Go, TypeScript, SwiftPM, Homebrew, NuGet, Cargo and Gradle caches. Supported categories can be scheduled. |
 | Agent leftovers | Old Codex runtime installation folders, recognized updater caches and selected log directories. Logs require manual review. |
 | Additional manual cleanup | Old npx environments, Rust `target` and Swift `.build` folders in project roots you choose, and the recognized Claude VM image. MCP environments in npx are preserved. |
-| Inspection only | Git worktrees, Docker/OrbStack storage and macOS code signing copies. Sniff reports these without deleting them. |
+| Git worktrees | Finds registered worktrees and checks visible usage, local changes, ignored files and pending commits. Old, clean copies with published and integrated commits can be selected for manual cleanup. |
+| Inspection only | Docker/OrbStack storage and macOS code signing copies. Sniff reports these without deleting them. |
 
-Source code, agent sessions, settings, credentials, databases, container volumes and the main runtime stay outside the cleanup rules. The [cleanup policy](docs/cleaning-policy.md) lists the recognized paths, retention rules and exceptions.
+Primary checkouts, branches, agent sessions, settings, credentials, databases, container volumes and the main runtime are preserved. Worktree cleanup removes a redundant working copy only after the Git and local-state checks pass. The [cleanup policy](docs/cleaning-policy.md) lists the recognized paths, retention rules and exceptions.
 
 ## Install
 
@@ -44,11 +45,13 @@ The current preview is ad hoc signed and has not been notarized by Apple, so mac
 
 Items start unchecked. In Settings, choose project folders, set retention periods and exclude paths you want to keep. Excluding a path inside a cleanup candidate preserves the whole candidate folder.
 
+To focus on worktrees, open **Projects and worktrees** and choose **Scan worktrees**. Filter candidates, pending work or active copies. Worktrees must be outside the retention period (14 days by default). Commit checks use locally recorded remote references; Sniff does not fetch or contact the server. If it cannot verify a worktree, it keeps it.
+
 The app and CLI support English, Portuguese and Spanish. Choose a language in Settings → General → Language. App text changes immediately; some macOS menu actions need an app restart. The interface follows the system appearance and respects Reduce Motion.
 
 ## Scheduling
 
-Scheduling is off by default. You can enable scheduled scans to review later, or allow automatic cleanup of selected caches that tools can recreate. Automatic cleanup excludes npx environments, project builds, logs, VMs and all inspection-only categories.
+Scheduling is off by default. You can enable scheduled scans to review later, or allow automatic cleanup of selected caches that tools can recreate. Automatic cleanup excludes worktrees, npx environments, project builds, logs, VMs and all inspection-only categories.
 
 The scheduler uses a macOS user LaunchAgent with low-priority disk I/O. It wakes every 15 minutes to check whether a run is due, then exits. If it detects a supported build in progress or cannot complete its process checks, it postpones the run for an hour. Scheduled scans cover known caches; project discovery and worktree/container inspection happen during manual scans. An optional monitor checks root-directory metadata every six hours without walking their contents.
 
@@ -75,6 +78,8 @@ sniff clean --plan ./cleanup-plan.json
 `clean` requires a saved plan and asks you to confirm deletion. The app and CLI share the same scanner, cleanup checks, settings and history. JSON output is available for scripts. Saved plans contain local paths and file metadata, so keep them private.
 
 The [CLI reference](docs/cli.md) covers installation, commands, noninteractive approval and exit codes. Use the app to register or disable the macOS background service.
+
+For a worktree-only scan, use `sniff scan --worktrees`, then `sniff list --category worktree` to review the results.
 
 ## Technical details
 

@@ -27,11 +27,29 @@ A remoção usa descritores de diretório, `openat(O_NOFOLLOW)`, `fstatat` e `un
 | Logs | Apenas `.log` nos diretórios de logs reconhecidos | Manual; retenção própria |
 | Builds | `target` com Cargo.toml e `.build` com Package.swift em raízes escolhidas | Manual; ferramentas de build ativas preservam |
 | VM Claude | Somente `vm_bundles/claudevm.bundle/rootfs.img` | Manual; reconstrução avisada; Claude ativo preserva |
-| Worktrees | Registros reais de `git worktree list`, raízes de projetos/Codex/Claude | Somente inspeção |
+| Worktrees | Registros reais de `git worktree list`, raízes de projetos/Codex/Claude | Manual; apenas antigas, sem uso visível, alterações, dados locais ou commits pendentes |
 | Docker / OrbStack | `system df`, containers, volumes e imagens sem tag | Somente inspeção; não inicia o engine |
 | Clones de assinatura | `X/*.code_sign_clone/code_sign_clone.*` do usuário | Somente inspeção; versão e uso por inode |
 
-O inventário de worktrees consulta dirty/untracked, ignorados, branch e commits exclusivos frente à principal registrada em `upstream/HEAD` ou `origin/HEAD`. Não assume `main`, não faz fetch nem afirma que a referência local está atualizada. Arquivamento conservador com snapshot/restauração e comparação atual do servidor fica para uma próxima versão. Um Git limpo não autoriza remoção.
+### Worktrees
+
+A análise completa e `sniff scan --worktrees` consultam os registros reais do Git, inclusive worktrees fora das pastas de projetos. Repositórios e worktrees são deduplicados por dispositivo/inode. O checkout principal nunca entra na lista de remoção.
+
+Para oferecer uma worktree à revisão manual, o Sniff exige:
+
+- Registro Git e diretório administrativo correspondentes, sem symlinks nos ancestrais, bloqueios ou operação Git em andamento.
+- Inventário completo dos processos visíveis, sem referência ao caminho, arquivo aberto ou hardlink aberto por outro caminho.
+- Ausência de alterações locais, arquivos novos, submódulos e flags que possam ocultar alterações do Git.
+- Todos os commits de `HEAD`, `ORIG_HEAD` e do reflog local publicados nas referências remotas conhecidas. O `HEAD` também precisa estar integrado à principal registrada em `upstream/HEAD`, `origin/HEAD` ou em um único outro remoto com principal registrada. Não se presume `main` ou `master`.
+- Arquivos ignorados limitados a dependências/compilações reconhecidas por arquivos de projeto rastreados: `node_modules`, `.next`, `.nuxt`, Rust `target`, SwiftPM `.build` e .NET `bin`/`obj`. Configurações, credenciais, bancos, estado de agentes e repositórios aninhados preservam a worktree inteira, inclusive dentro dessas pastas.
+- Nenhuma escrita dentro do prazo de retenção, que é de 14 dias por padrão. Isso inclui os metadados administrativos da worktree.
+- Manifesto completo, dentro dos limites de análise. Falha ou análise parcial preserva o item.
+
+As comparações usam referências locais: não há fetch, consulta atual do servidor, hooks ou execução dos filtros clean/process do projeto. Histórico incompleto, principal desconhecida ou evidência inconclusiva impedem a remoção. Excluir o caminho do repositório principal também preserva suas worktrees externas. Categorias manuais desabilitadas não entram em planos da CLI.
+
+A remoção exige seleção explícita e confirmação do plano. O executor repete as verificações Git e de uso, confere os manifestos e remove somente a pasta escolhida e seu diretório administrativo, usando descritores. Não executa `--force`, prune global ou exclusão de branches. O arquivo `.git` fica por último; uma falha parcial tenta manter o vínculo do Git para revisão. Mudanças nos metadados administrativos preservam o registro restante.
+
+O Sniff não cria backups dessas worktrees. A cópia removida deve ser reconstruível pelos commits já preservados no repositório principal; dados locais importantes bloqueiam a limpeza. A limpeza de worktrees nunca entra no agendamento automático. Veja os formatos de registro na [documentação do Git](https://git-scm.com/docs/git-worktree).
 
 Docker mostra o total e o recuperável informado pelo engine, separados do espaço APFS. Imagem sem tag não significa imagem sem container. Esta versão não executa prune, `system prune -a`, remoção de volumes ou bancos.
 
@@ -39,6 +57,6 @@ Clones Chromium/Electron são parte legítima do mecanismo de atualização. Uma
 
 ## Proteções
 
-Sessões, configurações, credenciais, fontes, bancos, volumes e runtime principal ficam fora das regras. Exclusões persistentes preservam também o item pai. A VM Claude não inclui sessiondata, base comprimida ou metadados. A automação só admite categorias regeneráveis habilitadas, nunca VMs, worktrees, Docker, builds, logs, npx ou clones.
+Sessões, configurações, credenciais, fontes com alterações locais, bancos, volumes e runtime principal ficam fora das regras. Checkouts principais e branches são preservados; a exceção para cópias de código já commitadas são as worktrees que passam por todas as verificações e pela revisão manual acima. Exclusões persistentes preservam também o item pai. A VM Claude não inclui sessiondata, base comprimida ou metadados. A automação só admite categorias regeneráveis habilitadas, nunca VMs, worktrees, Docker, builds, logs, npx ou clones.
 
 Limpeza de resíduos não corrige vazamento de processos, concorrência excessiva do Codex ou kernel panic. O Sniff não modifica o Codex nem atribui causa a incidentes.

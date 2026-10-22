@@ -24,7 +24,7 @@ public enum Category: String, Codable, CaseIterable, Sendable, Identifiable {
     }
     public var regeneration: String {
         switch self {
-        case .worktree: "Pode conter código, commits exclusivos, configurações e bancos ignorados pelo Git. Esta versão só inspeciona worktrees."
+        case .worktree: "Seleção manual: remove apenas worktrees antigas, sem uso visível, alterações locais, dados importantes ou commits pendentes. O checkout principal e os branches são preservados."
         case .docker: "O Sniff inspeciona imagens e caches e preserva containers e volumes. Para remover algo pelo Docker, você precisa revisar os itens separadamente."
         case .claudeVM: "Você precisa selecionar a imagem manualmente. O Claude terá que reconstruir a VM no próximo uso. Sessiondata, a base comprimida e os metadados são preservados."
         case .signingClone: "Mantêm a assinatura durante atualizações e podem compartilhar blocos APFS. Esta versão só inspeciona esses clones, mesmo quando são antigos e não há uso visível."
@@ -83,6 +83,7 @@ public struct Finding: Codable, Identifiable, Sendable {
     public var manifest: [TreeEntry]
     public var details: [String]
     public var partialMeasurement = false
+    public var worktree: WorktreeAssessment?
     public init(path: String, title: String, category: Category, ruleID: String, state: FindingState, reason: String, logicalBytes: Int64 = 0, allocatedBytes: Int64 = 0, sharedLinks: Bool = false, manifest: [TreeEntry] = [], details: [String] = []) {
         self.path = path; self.title = title; self.category = category; self.ruleID = ruleID; self.state = state; self.reason = reason
         self.logicalBytes = logicalBytes; self.allocatedBytes = allocatedBytes; self.sharedLinks = sharedLinks; self.manifest = manifest; self.details = details

@@ -33,6 +33,25 @@ sniff clean --plan ./cleanup-plan.json
 
 Scanning never removes files. Without `--quick`, scans also inspect registered project folders, worktrees, Docker and other manual categories. `list` reads the last saved scan. Without filters, `plan` selects only enabled categories of caches that tools can recreate. Use repeated `--category` options or repeated `--path` options for exact paths; the two filters cannot be mixed.
 
+### Worktrees
+
+```sh
+sniff scan --worktrees --json
+sniff list --category worktree
+sniff list --category worktree --ready
+sniff config --enable worktree
+sniff plan --category worktree --output ./worktree-plan.json
+sniff clean --plan ./worktree-plan.json
+```
+
+`--worktrees` scans only registered Git worktrees and replaces the last saved scan with those results. It cannot be combined with `--quick`. Add project folders through `config --project` when needed; known Codex and Claude worktree roots are also inspected.
+
+Candidates must be outside the retention window, visibly idle, clean and free of important ignored files. Their commits must be published and integrated into the recorded default branch. Pending commits, local changes, locks, incomplete history or an unknown default branch preserve the worktree. These checks use local remote-tracking references; they do not fetch or contact the server.
+
+Worktrees are disabled for cleanup by default and always excluded from automatic cleanup and unfiltered default plans. Explicit enablement and a reviewed plan are required. Primary checkouts and branches remain. Deleted worktrees are not backed up by the app; see the [full policy](cleaning-policy.md#worktrees).
+
+JSON worktree items include a `worktree` object with stable `status`, repository/branch, local change count, unpublished and unmerged commit counts, and the comparison reference. Unknown counts are omitted. The file and administrative manifests are stored only in private state and exported plans, not in the summary output.
+
 `plan` previews candidates unless `--output` is given. The exported JSON file is private (mode 0600), includes the file manifest and expires **15 minutes after the scan**. Existing files are never overwritten. The plan contains local paths and file metadata, so keep it private.
 
 `clean` previews the plan and asks you to type **CLEAN**. To approve the saved plan without an interactive prompt, use:
@@ -55,7 +74,7 @@ sniff status --json
 sniff history --language pt
 ```
 
-Manual cleanup categories require explicit enablement and selection. Worktrees, Docker and code signing copies remain inspection-only. The CLI reports saved scheduler settings; use the app to register or disable its macOS background service. It does not install cron jobs.
+Manual cleanup categories, including worktrees, require explicit enablement and selection. Docker and code signing copies remain inspection-only. The CLI reports saved scheduler settings; use the app to register or disable its macOS background service. It does not install cron jobs.
 
 The default state directory is `~/Library/Application Support/Sniff`. `--state-dir <directory>` selects a separate state store for every command; it does not change the home directory bound to cleanup plans. GUI, CLI and scheduler share an operation lock. Corrupt state is reported instead of silently overwritten.
 

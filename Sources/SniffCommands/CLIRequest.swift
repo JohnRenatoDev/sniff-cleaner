@@ -6,6 +6,7 @@ public struct CLIRequest: Sendable {
     public var action: Action = .help
     public var json = false
     public var quick = false
+    public var worktreesOnly = false
     public var yes = false
     public var readyOnly = false
     public var output: String?
@@ -37,6 +38,7 @@ public struct CLIRequest: Sendable {
             case "--version", "-v": informational = .version
             case "--json": request.json = true
             case "--quick": request.quick = true
+            case "--worktrees": request.worktreesOnly = true
             case "--yes", "-y": request.yes = true
             case "--ready": request.readyOnly = true
             case "--output", "-o": request.output = try value(argument)
@@ -61,6 +63,8 @@ public struct CLIRequest: Sendable {
         if let informational { request.action = informational; return request }
         guard request.categories.isEmpty || request.paths.isEmpty else { throw CLIFailure.usage("Use either --category or --path, not both.") }
         if request.quick && request.action != .scan { throw CLIFailure.usage("--quick is only available for scan.") }
+        if request.worktreesOnly && request.action != .scan { throw CLIFailure.usage("--worktrees is only available for scan.") }
+        if request.quick && request.worktreesOnly { throw CLIFailure.usage("Use either --quick or --worktrees, not both.") }
         if request.readyOnly && request.action != .list { throw CLIFailure.usage("--ready is only available for list.") }
         if request.yes && request.action != .clean { throw CLIFailure.usage("--yes is only available for clean.") }
         if request.output != nil && request.action != .plan { throw CLIFailure.usage("--output is only available for plan.") }

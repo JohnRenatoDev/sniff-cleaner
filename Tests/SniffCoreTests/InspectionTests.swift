@@ -26,7 +26,7 @@ import Testing
     var processes = ProcessInventory(); processes.complete = true
     let findings = try ProjectInspector.inspect(repositories: discovered, preferences: preferences, processes: processes, catalog: fixture.catalog, progress: { _ in })
     let item = try #require(findings.first { $0.path == external })
-    #expect(item.state == .review)
+    #expect(item.state == .protected)
     #expect(item.details.contains { $0.contains("origin/trunk-real") })
     #expect(item.details.contains { $0.contains("Ignorado: local.db") })
     #expect(item.details.contains { $0.contains("Commits exclusivos") && $0.contains("0") })

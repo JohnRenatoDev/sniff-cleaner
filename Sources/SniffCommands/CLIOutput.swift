@@ -17,12 +17,31 @@ struct FindingSummary: Encodable {
     let logicalBytes: Int64
     let partialMeasurement: Bool
     let details: [String]
+    let worktree: WorktreeSummary?
     init(_ finding: Finding, language: AppLanguage) {
         path = finding.path; category = finding.category.cliName; state = finding.state.rawValue
         title = finding.category == .docker || finding.title == finding.category.title ? Localization.text(finding.title, language: language) : finding.title
         reason = Localization.text(finding.reason, language: language); allocatedBytes = finding.allocatedBytes
         logicalBytes = finding.logicalBytes; partialMeasurement = finding.partialMeasurement
         details = finding.details.map { Localization.text($0, language: language) }
+        worktree = finding.worktree.map(WorktreeSummary.init)
+    }
+}
+
+struct WorktreeSummary: Encodable {
+    let status: WorktreeStatus
+    let repository: String
+    let branch: String?
+    let head: String?
+    let comparisonReference: String?
+    let localChanges: Int?
+    let unpublishedCommits: Int?
+    let unmergedCommits: Int?
+    let ignoredPaths: Int?
+    init(_ value: WorktreeAssessment) {
+        status = value.status; repository = value.repository; branch = value.branch; head = value.head
+        comparisonReference = value.comparisonReference; localChanges = value.localChanges
+        unpublishedCommits = value.unpublishedCommits; unmergedCommits = value.unmergedCommits; ignoredPaths = value.ignoredPaths
     }
 }
 
@@ -55,6 +74,7 @@ enum CLIOutput {
         ]
         let options = [
             ("--json", "Machine-readable output."),
+            ("--worktrees", "Scan only Git worktrees; never removes files."),
             ("--language en|pt|es|system", "Language for this invocation."),
             ("--state-dir <directory>", "Use a separate state directory."),
             ("--help, -h", "Show this help."),

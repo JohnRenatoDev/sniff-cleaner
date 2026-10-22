@@ -16,6 +16,10 @@ struct ReviewSheet: View {
             }
             Text(L("O Sniff vai remover os caminhos abaixo definitivamente. Você pode precisar baixar dependências ou compilar de novo. Antes de remover, o Sniff verifica cada item e preserva os que mudaram ou estão em uso."))
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
+            if store.plan.contains(where: { $0.category == .worktree }) {
+                Text(L("A pasta local da worktree será removida. O Sniff mantém os branches e o repositório principal."))
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
             List(store.plan) { item in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack { Text(Display.title(item)).fontWeight(.medium); Spacer(); Text(Display.bytes(item.allocatedBytes)).monospacedDigit() }

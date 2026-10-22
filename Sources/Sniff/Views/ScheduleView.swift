@@ -35,7 +35,7 @@ struct ScheduleView: View {
                         Toggle(L("Receber notificações do Sniff"), isOn: Binding(get: { store.state.preferences.notificationsEnabled }, set: { store.setNotifications($0) }))
                     }
                     Section(L("O que pode ser limpo automaticamente")) {
-                        Text(L("A limpeza automática usa só caches que podem ser recriados, nas categorias que você habilitou nos Ajustes. VMs, compilações, ambientes npx e logs exigem seleção manual. Worktrees, Docker e clones de assinatura ficam apenas para inspeção nesta versão."))
+                        Text(L("A limpeza automática usa só caches que podem ser recriados, nas categorias habilitadas nos Ajustes. Worktrees, VMs, compilações, ambientes npx e logs exigem seleção manual. Docker e clones de assinatura ficam apenas para inspeção."))
                         Text(L("Análises agendadas cobrem os caches conhecidos. A análise manual inclui projetos, worktrees e Docker.")).font(.caption).foregroundStyle(.secondary)
                         SettingsLink { Text(L("Escolher categorias…")) }
                     }

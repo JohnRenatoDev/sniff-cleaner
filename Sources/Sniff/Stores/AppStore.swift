@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
     var focusedPath: String?
     var section: AppSection = .overview
     var search = ""
+    var worktreeFilter: WorktreeFilter = .all
     var busy = false
     var canCancel = false
     var activity = ""
@@ -31,7 +32,11 @@ final class AppStore: ObservableObject {
     init() {
         state = PersistedState()
         #if DEBUG
-        if PresentationPreview.enabled { state = PresentationPreview.state(); language = .english; focusedPath = state.lastScan?.findings.first?.path; return }
+        if PresentationPreview.enabled {
+            state = PresentationPreview.state(); language = .english
+            if PresentationPreview.worktrees { section = .worktrees }
+            focusedPath = state.lastScan?.findings.first?.path; return
+        }
         #endif
         do { state = try disk.loadValidated() } catch { self.error = error.localizedDescription }
         if state.preferences.projectRoots.isEmpty {
@@ -50,11 +55,11 @@ final class AppStore: ObservableObject {
             case .overview: sectionMatches = true
             case .ready: sectionMatches = item.state == .ready
             case .preserved: sectionMatches = item.state != .ready
-            case .worktrees: sectionMatches = item.category == .worktree || item.category == .build
+            case .worktrees: sectionMatches = (item.category == .worktree || item.category == .build) && worktreeFilter.matches(item)
             case .docker: sectionMatches = item.category == .docker
             case .schedule, .history: sectionMatches = false
             }
-            return sectionMatches && (search.isEmpty || L(item.title).localizedCaseInsensitiveContains(search) || item.path.localizedCaseInsensitiveContains(search) || L(item.category.title).localizedCaseInsensitiveContains(search))
+            return sectionMatches && (search.isEmpty || L(item.title).localizedCaseInsensitiveContains(search) || item.path.localizedCaseInsensitiveContains(search) || L(item.category.title).localizedCaseInsensitiveContains(search) || (item.worktree?.branch?.localizedCaseInsensitiveContains(search) ?? false))
         }
     }
     var plan: [Finding] { findings.filter { selected.contains($0.id) && $0.state == .ready && state.preferences.enabledCategories.contains($0.category) } }
@@ -89,7 +94,7 @@ final class AppStore: ObservableObject {
         self.language = language
         NativeMenuLocalization.update()
     }
-    func scan() {
+    func scan(worktreesOnly: Bool = false) {
         guard !presentationPreview, !busy else { return }
         busy = true; canCancel = true; activity = "Começando a farejar…"; selected.removeAll(); error = nil
         let disk = disk
@@ -98,7 +103,7 @@ final class AppStore: ObservableObject {
                 let background = Task.detached(priority: .utility) { [weak self] in
                     let lock = try disk.lock(); defer { withExtendedLifetime(lock) {} }
                     var latest = try disk.loadValidated()
-                    let result = try Scanner().scan(preferences: latest.preferences) { message in Task { @MainActor in self?.activity = message } }
+                    let result = try Scanner().scan(preferences: latest.preferences, worktreesOnly: worktreesOnly) { message in Task { @MainActor in self?.activity = message } }
                     latest.lastScan = result
                     try disk.save(latest)
                     return result
@@ -140,7 +145,7 @@ final class AppStore: ObservableObject {
         guard var snapshot = state.lastScan else { return }
         let catalog = RuleCatalog()
         for index in snapshot.findings.indices {
-            if let reason = catalog.protectedReason(snapshot.findings[index].path, preferences: state.preferences) {
+            if let reason = catalog.protectedReason(snapshot.findings[index], preferences: state.preferences) {
                 snapshot.findings[index].state = .protected; snapshot.findings[index].reason = reason
                 selected.remove(snapshot.findings[index].id)
             }

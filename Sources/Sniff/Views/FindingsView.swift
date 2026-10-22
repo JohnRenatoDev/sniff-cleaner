@@ -23,7 +23,7 @@ struct FindingsView: View {
                     findingsList
                     if let focused = store.focused {
                         Divider()
-                        FindingInspector(item: focused, store: store).frame(width: 277)
+                        FindingInspector(item: focused, store: store).id(focused.id).frame(width: 277)
                     }
                 }
             }
@@ -63,11 +63,22 @@ struct FindingsView: View {
                 Text(store.section == .overview ? L("Resultados da análise") : store.section.title).font(.headline)
                 Text(Display.number(store.visible.count)).font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                if store.section == .worktrees {
+                    Button(L("Analisar worktrees")) { store.scan(worktreesOnly: true) }.disabled(store.busy)
+                }
                 Menu {
                     Button(L("Selecionar caches permitidos")) { store.selectRecommended() }
                     Button(L("Desmarcar tudo")) { store.selected.removeAll() }
                 } label: { Image(systemName: "ellipsis.circle") }.menuStyle(.borderlessButton).fixedSize().disabled(store.busy)
             }.padding(.horizontal, 22).padding(.top, 16).padding(.bottom, 10)
+            if store.section == .worktrees {
+                Picker(L("Filtrar worktrees"), selection: $store.worktreeFilter) {
+                    ForEach(WorktreeFilter.allCases) { filter in Text(filter.title).tag(filter) }
+                }.pickerStyle(.segmented).labelsHidden().padding(.horizontal, 20).padding(.bottom, 10)
+                Text(L("Worktrees em uso, com alterações, dados locais ou commits pendentes são preservadas."))
+                    .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.bottom, 10)
+            }
             TextField(L("Filtrar por ferramenta ou caminho"), text: $store.search)
                 .textFieldStyle(.roundedBorder).padding(.horizontal, 20).padding(.bottom, 12)
                 .accessibilityLabel(L("Filtrar resultados"))

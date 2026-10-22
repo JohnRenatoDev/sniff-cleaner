@@ -30,5 +30,8 @@
   "Tamanho não concluído: {0}",
   "Total: {0} · Recuperável informado pelo Docker: {1} · Ativos: {2}",
   "{0} arquivos ignorados; podem conter configuração, estado ou bancos.",
-  "{0} · versão {1}"
+  "{0} · versão {1}",
+  "{0} caminhos ignorados pelo Git.",
+  "Commits não publicados: {0}.",
+  "Metadado local: {0}"
 ]

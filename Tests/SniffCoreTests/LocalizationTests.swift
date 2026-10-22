@@ -61,6 +61,8 @@ import Testing
     #expect(Localization.text("Dentro da retenção de 14 dias.", language: .spanish) == "El elemento cambió en los últimos 14 días y se ha conservado.")
     #expect(Localization.text("Principal registrada: refs/remotes/origin/trunk-real. Referência local; nenhum fetch executado.", language: .english).contains("refs/remotes/origin/trunk-real"))
     #expect(Localization.text(path, language: .spanish) == path)
+    #expect(Localization.text("Commits não publicados: 2.", language: .english) == "Unpublished commits: 2.")
+    #expect(Localization.text("3 caminhos ignorados pelo Git.", language: .spanish) == "3 rutas ignoradas por Git.")
 }
 
 @Test func singularPluralAndFormattersFollowTheChosenLanguage() {

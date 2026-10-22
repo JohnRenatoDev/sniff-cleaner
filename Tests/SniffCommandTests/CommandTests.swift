@@ -60,6 +60,53 @@ struct CommandFixture {
     #expect(throws: (any Error).self) { try CLIRequest.parse(["plan", "--category", "all"]) }
     #expect(throws: (any Error).self) { try CLIRequest.parse(["scan", "--language", "fr"]) }
     #expect(try CLIRequest.parse(["scan", "--language", "es"]).language == .spanish)
+    #expect(try CLIRequest.parse(["scan", "--worktrees"]).worktreesOnly)
+    #expect(throws: (any Error).self) { try CLIRequest.parse(["scan", "--quick", "--worktrees"]) }
+    #expect(throws: (any Error).self) { try CLIRequest.parse(["list", "--worktrees"]) }
+}
+
+@Test func worktreeOnlyCLIRequiresExplicitManualPlanAndPreservesCaches() throws {
+    let fixture = try CommandFixture(); defer { fixture.dispose() }
+    let source = try fixture.make("Code/repository/source.swift", content: "published fixture source")
+    let cache = try fixture.make(".npm/_cacache/keep-this-cache")
+    let repository = source.deletingLastPathComponent().path
+    let worktree = fixture.home.appendingPathComponent("external/worktree").path
+    func git(_ args: [String], in path: String? = nil) throws -> String {
+        let result = Command.run("/usr/bin/git", ["--no-optional-locks", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "user.name=CLI fixture", "-c", "user.email=fixture@localhost", "-C", path ?? repository] + args)
+        guard result.status == 0 else { throw CLIFailure.usage("Fixture Git command failed") }
+        return result.output
+    }
+    _ = try git(["init", "-b", "real-default"])
+    _ = try git(["add", "."])
+    _ = try git(["commit", "-m", "fixture"])
+    _ = try git(["update-ref", "refs/remotes/origin/real-default", "HEAD"])
+    _ = try git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/real-default"])
+    _ = try git(["worktree", "add", "-b", "fixture-copy", worktree, "HEAD"])
+    let admin = try git(["rev-parse", "--path-format=absolute", "--git-dir"], in: worktree).trimmingCharacters(in: .newlines)
+    for root in [worktree, admin] {
+        for entry in try FileTree.read(root).reversed() {
+            try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86_400)], ofItemAtPath: entry.relativePath.isEmpty ? root : root + "/" + entry.relativePath)
+        }
+    }
+    let scan = try fixture.runner.run(fixture.request(["scan", "--worktrees", "--json"]))
+    let json = try #require(JSONSerialization.jsonObject(with: Data(scan.output.utf8)) as? [String: Any])
+    let items = try #require(json["items"] as? [[String: Any]])
+    #expect(items.count == 1 && items.first?["category"] as? String == "worktree")
+    #expect(items.first?["state"] as? String == "ready")
+    let assessment = try #require(items.first?["worktree"] as? [String: Any])
+    #expect(assessment["status"] as? String == "idle" && assessment["unpublishedCommits"] as? Int == 0)
+    #expect(assessment["removalContext"] == nil)
+    #expect(FileManager.default.fileExists(atPath: worktree))
+    #expect(throws: (any Error).self) { try fixture.runner.run(fixture.request(["plan", "--category", "worktree"])) }
+    _ = try fixture.runner.run(fixture.request(["config", "--enable", "worktree"]))
+    #expect(throws: (any Error).self) { try fixture.runner.run(fixture.request(["plan"])) }
+    let plan = fixture.root.appendingPathComponent("worktree-plan.json")
+    _ = try fixture.runner.run(fixture.request(["plan", "--category", "worktree", "--output", plan.path]))
+    let result = try fixture.runner.run(fixture.request(["clean", "--plan", plan.path, "--yes", "--json"]))
+    #expect(result.status == 0)
+    #expect(!FileManager.default.fileExists(atPath: worktree))
+    #expect(FileManager.default.fileExists(atPath: source.path) && FileManager.default.fileExists(atPath: cache.path))
+    #expect(try git(["rev-parse", "--verify", "refs/heads/fixture-copy"]).isEmpty == false)
 }
 
 @Test func planFilesCannotOverwriteExistingFilesOrUseSymlinks() throws {

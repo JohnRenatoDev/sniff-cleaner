@@ -62,7 +62,17 @@ public struct RuleCatalog: Sendable {
         }
         return nil
     }
+    public func protectedReason(_ finding: Finding, preferences: Preferences) -> String? {
+        if let reason = protectedReason(finding.path, preferences: preferences) { return reason }
+        if finding.category == .worktree, let repository = finding.worktree?.repository {
+            for excluded in preferences.exclusions where FileTree.contains(FileTree.canonical(excluded), repository) {
+                return "Preservado por uma exclusão sua: \(excluded)"
+            }
+        }
+        return nil
+    }
     public func validates(_ finding: Finding, preferences: Preferences) -> Bool {
+        if finding.category == .worktree { return WorktreeInspector.recognizes(finding, preferences: preferences, catalog: self) }
         if let rule = rule(id: finding.ruleID), rule.category == finding.category { return rule.matches(finding.path) }
         if finding.ruleID == "rust-target", finding.category == .build {
             let parent = URL(fileURLWithPath: finding.path).deletingLastPathComponent().path

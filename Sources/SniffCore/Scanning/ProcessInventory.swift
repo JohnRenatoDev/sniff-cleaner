@@ -18,10 +18,15 @@ public struct ProcessInventory: Sendable {
         let tokens = ["swift-frontend", "rustc", "cargo build", "cargo test", "xcodebuild", "ninja ", "clang -", "GradleDaemon", "dotnet build"]
         return commands.contains { command in tokens.contains { command.localizedCaseInsensitiveContains($0) } }
     }
-    public func reason(path: String, tokens: [String] = []) -> String? {
+    public func reason(path: String, tokens: [String] = [], manifest: [TreeEntry] = []) -> String? {
         guard complete else { return "O Sniff não conseguiu verificar todos os processos visíveis e preservou este item." }
         if openPaths.contains(where: { FileTree.contains(path, $0) }) { return "Um processo visível mantém arquivos ou uma pasta deste caminho abertos." }
         if commands.contains(where: { $0.contains(path) }) { return "Um processo em execução faz referência a este caminho." }
+        let linked = Set(manifest.filter { !$0.stamp.isDirectory && $0.stamp.links > 1 }.map { "\($0.stamp.device):\($0.stamp.inode)" })
+        if !linked.isEmpty, openPaths.contains(where: { opened in
+            guard let stamp = try? FileTree.stamp(opened) else { return false }
+            return linked.contains("\(stamp.device):\(stamp.inode)")
+        }) { return "Um processo mantém um hardlink deste item aberto em outro caminho. Preservado." }
         if let token = tokens.first(where: { token in commands.contains { $0.localizedCaseInsensitiveContains(token) } }) { return "Ferramenta ativa: \(token.trimmingCharacters(in: .whitespaces))." }
         return nil
     }

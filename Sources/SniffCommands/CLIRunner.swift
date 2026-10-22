@@ -14,7 +14,7 @@ public struct CLIRunner: Sendable {
         case .version: return .init(output: ProductInfo.version)
         case .categories:
             struct Row: Encodable { let id: String; let title: String; let automatic: Bool; let inspectionOnly: Bool }
-            let rows = SniffCore.Category.allCases.map { Row(id: $0.cliName, title: text($0.title), automatic: $0.allowsAutomatic, inspectionOnly: [.worktree, .docker, .signingClone].contains($0)) }
+            let rows = SniffCore.Category.allCases.map { Row(id: $0.cliName, title: text($0.title), automatic: $0.allowsAutomatic, inspectionOnly: [.docker, .signingClone].contains($0)) }
             return .init(output: request.json ? try CLIOutput.json(rows) : rows.map { "\($0.id)  \($0.title)\($0.inspectionOnly ? " [inspection-only]" : "")" }.joined(separator: "\n"))
         case .status:
             let state = try store.loadValidated()
@@ -37,7 +37,7 @@ public struct CLIRunner: Sendable {
                 let code = environment.catalog.home + "/Code"
                 if FileManager.default.fileExists(atPath: code) { state.preferences.projectRoots = [code] }
             }
-            let snapshot = try Scanner(catalog: environment.catalog, captureProcesses: environment.captureProcesses).scan(preferences: state.preferences, deep: !request.quick) { message in
+            let snapshot = try Scanner(catalog: environment.catalog, captureProcesses: environment.captureProcesses).scan(preferences: state.preferences, deep: !request.quick, worktreesOnly: request.worktreesOnly) { message in
                 diagnostics(Localization.text(message, language: language))
             }
             state.lastScan = snapshot; try store.save(state)
@@ -78,8 +78,8 @@ public struct CLIRunner: Sendable {
             var state = try store.loadValidated()
             let capture = environment.captureProcesses; let catalog = environment.catalog
             let executor = CleaningExecutor(catalog: catalog, useCheck: { finding in
-                let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"]
-                return capture().reason(path: finding.path, tokens: tokens)
+                let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? (finding.category == .worktree ? [] : ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"])
+                return capture().reason(path: finding.path, tokens: tokens, manifest: finding.manifest)
             })
             let report = executor.execute(plan: plan.findings, scannedAt: plan.scannedAt, preferences: state.preferences) { message in diagnostics(Localization.text(message, language: language)) }
             state.apply(report); try store.save(state)
@@ -100,7 +100,7 @@ public struct CLIRunner: Sendable {
             let lock = try store.lock(); defer { withExtendedLifetime(lock) {} }
             var state = try store.loadValidated()
             for category in request.enable {
-                guard ![.worktree, .docker, .signingClone].contains(category) else { throw CLIFailure.usage("This category is inspection-only: {0}.", category.cliName) }
+                guard ![.docker, .signingClone].contains(category) else { throw CLIFailure.usage("This category is inspection-only: {0}.", category.cliName) }
                 state.preferences.enabledCategories.insert(category)
             }
             for category in request.disable { state.preferences.enabledCategories.remove(category) }

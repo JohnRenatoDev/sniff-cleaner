@@ -6,13 +6,14 @@ public struct Scanner: Sendable {
     public init(catalog: RuleCatalog = .init(), captureProcesses: @escaping @Sendable () -> ProcessInventory = ProcessInventory.capture) {
         self.catalog = catalog; self.captureProcesses = captureProcesses
     }
-    public func scan(preferences: Preferences, deep: Bool = true, progress: @Sendable (String) -> Void = { _ in }) throws -> ScanSnapshot {
+    public func scan(preferences: Preferences, deep: Bool = true, worktreesOnly: Bool = false, progress: @Sendable (String) -> Void = { _ in }) throws -> ScanSnapshot {
         var snapshot = ScanSnapshot()
         progress("Verificando processos em uso…")
         let processes = captureProcesses()
         if !processes.complete { snapshot.notices.append("O Sniff não conseguiu verificar todos os processos e preservou os arquivos.") }
         for rule in catalog.rules {
             try Task.checkCancellation()
+            if worktreesOnly { break }
             progress("Farejando \(rule.category.title)…")
             guard FileManager.default.fileExists(atPath: rule.base) || access(rule.base, F_OK) == 0 else {
                 if errno == EACCES || errno == EPERM { snapshot.notices.append("Sem acesso: \(rule.base)") }
@@ -37,15 +38,19 @@ public struct Scanner: Sendable {
             } catch is CancellationError { throw CancellationError() }
             catch { snapshot.findings.append(.init(path: rule.base, title: rule.category.title, category: rule.category, ruleID: rule.id, state: .inaccessible, reason: error.localizedDescription)) }
         }
-        if deep {
+        if deep || worktreesOnly {
             progress("Conferindo projetos e worktrees…")
             let repositories = ProjectInspector.discover(roots: preferences.projectRoots + [catalog.home + "/.codex/worktrees", catalog.home + "/.claude/worktrees"], notices: &snapshot.notices)
-            snapshot.findings += try ProjectInspector.inspect(repositories: repositories, preferences: preferences, processes: processes, catalog: catalog, progress: progress)
-            progress("Conferindo Docker / OrbStack…")
-            snapshot.findings += DockerInspector.inspect(notices: &snapshot.notices)
-            progress("Conferindo clones de assinatura…")
-            snapshot.findings += SigningCloneInspector.inspect(processes: processes, preferences: preferences, notices: &snapshot.notices)
+            snapshot.findings += try ProjectInspector.inspect(repositories: repositories, preferences: preferences, processes: processes, catalog: catalog, worktreesOnly: worktreesOnly, progress: progress)
+            if !worktreesOnly {
+                progress("Conferindo Docker / OrbStack…")
+                snapshot.findings += DockerInspector.inspect(notices: &snapshot.notices)
+                progress("Conferindo clones de assinatura…")
+                snapshot.findings += SigningCloneInspector.inspect(processes: processes, preferences: preferences, notices: &snapshot.notices)
+            }
         }
+        try Task.checkCancellation()
+        if worktreesOnly { snapshot.notices.append("Análise somente de worktrees. Use a análise completa para conferir caches e outras categorias.") }
         snapshot.findings.sort { lhs, rhs in
             if lhs.state == .ready && rhs.state != .ready { return true }
             if rhs.state == .ready && lhs.state != .ready { return false }

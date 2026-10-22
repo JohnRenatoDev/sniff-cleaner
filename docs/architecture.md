@@ -22,7 +22,15 @@ O Mac precisa estar acordado e o usuário conectado. Não se promete execução 
 
 `lstat` registra dispositivo, inode, tipo, tempos, links, tamanho lógico e blocos alocados. Hardlinks são deduplicados dentro de cada item. APFS pode compartilhar blocos entre itens, snapshots e outros arquivos: o tamanho alocado é uma estimativa, não um ganho garantido. O histórico mede espaço livre antes/depois e mostra a variação líquida, que inclui atividade concorrente no volume.
 
-Worktrees têm medição limitada a 0,18 s / 3.000 entradas por item. Valores incompletos aparecem com **≥** e motivo explícito. A descoberta de projetos se limita a cinco níveis / 7.000 pastas. Não há varredura constante do disco inteiro.
+Worktrees preservadas têm medição limitada a 0,18 s / 3.000 entradas por item. Candidatas à remoção exigem manifesto completo, limitado a 180.000 entradas, e manifesto administrativo de até 200 entradas. Valores incompletos aparecem com **≥**; não autorizam remoção. A descoberta de projetos se limita a cinco níveis / 7.000 pastas. Não há varredura constante do disco inteiro.
+
+## Worktrees
+
+`WorktreeInspector` interpreta `git worktree list --porcelain -z`, valida o vínculo entre `.git`, o diretório administrativo e o repositório compartilhado, e registra uso, alterações, ignorados e commits pendentes em `WorktreeAssessment`. Somente candidatas recebem `WorktreeRemovalContext` e manifesto de remoção. O novo campo é opcional para manter a leitura dos inventários antigos.
+
+`WorktreeRemoval` usa o mesmo executor por descritores para a árvore e, depois, para aquele único registro administrativo. As referências dos branches e o checkout principal não são removidos. A revalidação compara o HEAD, a referência principal, os remotos locais, os metadados e os arquivos antes da remoção. Hardlinks repetidos acompanham as mudanças de link count/ctime causadas pelos próprios unlinks, sem aceitar mudanças de conteúdo.
+
+A interface filtra candidatas, pendências e itens em uso. `scan --worktrees` usa o mesmo núcleo sem percorrer os outros caches e substitui o último inventário por essa análise específica. A seleção recomendada e o agendamento automático continuam excluindo worktrees. Os testes de Git e remoção usam apenas repositórios temporários exclusivos.
 
 ## Fontes primárias consultadas
 
