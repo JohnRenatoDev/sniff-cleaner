@@ -30,13 +30,18 @@ Flickable {
       rowSpacing: Style.spacing.xs
       Repeater {
         model: (pane.panel.categories || []).filter(function(c) { return !c.inspectionOnly })
-        delegate: Toggle {
+        // Compact rows: one line per category, two columns.
+        delegate: Button {
           required property var modelData
+          readonly property bool on: pane.list("enabledCategories").indexOf(modelData.id) >= 0
           width: (body.width - Style.spacing.controlGap) / 2
-          label: modelData.title
-          description: modelData.automatic ? "" : pane.panel.tr("ui.manual_only")
-          checked: pane.list("enabledCategories").indexOf(modelData.id) >= 0
-          onClicked: pane.panel.config([checked ? "--disable" : "--enable", modelData.id])
+          leftAlign: true
+          selected: on
+          text: (on ? "[x] " : "[ ] ") + modelData.title + (modelData.automatic ? "" : " · " + pane.panel.tr("ui.manual_only"))
+          Accessible.role: Accessible.CheckBox
+          Accessible.checkable: true
+          Accessible.checked: on
+          onClicked: pane.panel.config([on ? "--disable" : "--enable", modelData.id])
         }
       }
     }
