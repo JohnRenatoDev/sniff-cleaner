@@ -6,10 +6,13 @@ public struct CleaningExecutor: Sendable {
     public init(catalog: RuleCatalog = .init(), useCheck: (@Sendable (Finding) -> String?)? = nil) {
         self.catalog = catalog
         self.useCheck = useCheck ?? { finding in
-            let inventory = ProcessInventory.capture()
-            let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? (finding.category == .worktree ? [] : ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"])
-            return inventory.reason(path: finding.path, tokens: tokens, manifest: finding.manifest)
+            Self.usageReason(finding, inventory: ProcessInventory.capture(), catalog: catalog)
         }
+    }
+    public static func usageReason(_ finding: Finding, inventory: ProcessInventory, catalog: RuleCatalog) -> String? {
+        if finding.ruleID == RustBuildInspector.ruleID { return RustBuildInspector.usageReason(finding, processes: inventory) }
+        let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? (finding.category == .worktree ? [] : ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"])
+        return inventory.reason(path: finding.path, tokens: tokens, manifest: finding.manifest)
     }
     public func execute(plan: [Finding], scannedAt: Date, preferences: Preferences, automatic: Bool = false, progress: @Sendable (String) -> Void = { _ in }) -> CleaningReport {
         var report = CleaningReport()
@@ -27,6 +30,7 @@ public struct CleaningExecutor: Sendable {
                 if let reason = catalog.protectedReason(finding, preferences: preferences) { throw SniffError.message(reason) }
                 let current = try FileTree.read(finding.path)
                 guard current == finding.manifest else { throw SniffError.message("Conteúdo mudou desde a análise. Preservado; analise novamente.") }
+                if finding.ruleID == RustBuildInspector.ruleID, let reason = RustBuildInspector.preservationReason(finding, preferences: preferences) { throw SniffError.message(reason) }
                 if finding.category == .npx && NpxPolicy.mustPreserve(finding.path) {
                     throw SniffError.message("Ambiente npx com MCP ou conteúdo não verificável. Item preservado.")
                 }
@@ -39,6 +43,7 @@ public struct CleaningExecutor: Sendable {
                 if finding.category == .worktree { try WorktreeInspector.revalidate(finding, preferences: preferences, catalog: catalog) }
                 // Usage checks can take time. Revalidate again immediately before unlinking.
                 guard try FileTree.read(finding.path) == finding.manifest else { throw SniffError.message("Item mudou durante a verificação de uso. Preservado.") }
+                if finding.ruleID == RustBuildInspector.ruleID, let reason = RustBuildInspector.preservationReason(finding, preferences: preferences) { throw SniffError.message(reason) }
                 acceptedPaths.append(finding.path)
                 if finding.category == .worktree { try WorktreeRemoval.remove(finding) }
                 else { try SecureRemoval.remove(path: finding.path, manifest: finding.manifest) }

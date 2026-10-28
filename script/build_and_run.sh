@@ -22,7 +22,10 @@ if p.exists():
         except BlockingIOError:
             sys.exit('O Sniff está analisando ou limpando. Aguarde ou cancele a análise antes de recompilar.')
 PY
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+# Packaging a build must not interrupt the installed app or a user's review.
+if [[ "$MODE" != "--build-only" ]]; then
+    pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+fi
 swift build --build-system native --disable-sandbox --scratch-path work/app-build --cache-path work/swift-cache --config-path work/swift-config --security-path work/swift-security -j 4
 BIN_DIR="$(swift build --build-system native --scratch-path work/app-build --show-bin-path)"
 /usr/bin/python3 script/package_app.py --bin-dir "$BIN_DIR" --output-dir "$ROOT_DIR/outputs"

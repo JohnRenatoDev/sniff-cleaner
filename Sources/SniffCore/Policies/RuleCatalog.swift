@@ -74,10 +74,7 @@ public struct RuleCatalog: Sendable {
     public func validates(_ finding: Finding, preferences: Preferences) -> Bool {
         if finding.category == .worktree { return WorktreeInspector.recognizes(finding, preferences: preferences, catalog: self) }
         if let rule = rule(id: finding.ruleID), rule.category == finding.category { return rule.matches(finding.path) }
-        if finding.ruleID == "rust-target", finding.category == .build {
-            let parent = URL(fileURLWithPath: finding.path).deletingLastPathComponent().path
-            return finding.path == parent + "/target" && FileManager.default.fileExists(atPath: parent + "/Cargo.toml") && preferences.projectRoots.contains { FileTree.contains(FileTree.canonical($0), parent) }
-        }
+        if finding.ruleID == RustBuildInspector.ruleID { return RustBuildInspector.recognizes(finding, preferences: preferences) }
         if finding.ruleID == "swift-build", finding.category == .build {
             let parent = URL(fileURLWithPath: finding.path).deletingLastPathComponent().path
             return finding.path == parent + "/.build" && FileManager.default.fileExists(atPath: parent + "/Package.swift") && preferences.projectRoots.contains { FileTree.contains(FileTree.canonical($0), parent) }

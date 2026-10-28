@@ -32,6 +32,12 @@ Worktrees preservadas têm medição limitada a 0,18 s / 3.000 entradas por item
 
 A interface filtra candidatas, pendências e itens em uso. `scan --worktrees` usa o mesmo núcleo sem percorrer os outros caches e substitui o último inventário por essa análise específica. A seleção recomendada e o agendamento automático continuam excluindo worktrees. Os testes de Git e remoção usam apenas repositórios temporários exclusivos.
 
+## Compilações Rust
+
+`RustBuildInspector` complementa a descoberta de repositórios: procura `Cargo.toml` até cinco níveis abaixo de raízes descobertas, com limite de 7.000 pastas, sem entrar em dependências, saídas de compilação ou symlinks. Assim, um port em `linux/` não fica escondido pela raiz Git do projeto. A busca deduplica caminhos e informa quando atinge o limite de pastas; uma raiz mais específica cobre projetos além desses limites.
+
+O perfil debug padrão e os perfis debug de triples são itens separados com manifesto completo. A regra `rust-debug` não aceita o antigo alvo `rust-target`, nem `target/release`, caminhos personalizados ou o diretório `target` inteiro. O executor reaplica as verificações de conteúdo e de arquivos rastreados depois da checagem de uso. O inventário inclui hardlinks abertos fora do caminho original. Projetos e worktrees inteiros ficam intactos.
+
 ## Fontes primárias consultadas
 
 - [SMAppService: Apple](https://developer.apple.com/documentation/servicemanagement/smappservice)

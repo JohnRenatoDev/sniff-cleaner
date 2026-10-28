@@ -78,8 +78,7 @@ public struct CLIRunner: Sendable {
             var state = try store.loadValidated()
             let capture = environment.captureProcesses; let catalog = environment.catalog
             let executor = CleaningExecutor(catalog: catalog, useCheck: { finding in
-                let tokens = catalog.rule(id: finding.ruleID)?.processTokens ?? (finding.category == .worktree ? [] : ["rustc", "swift-frontend", "xcodebuild", "cargo build", "swift build"])
-                return capture().reason(path: finding.path, tokens: tokens, manifest: finding.manifest)
+                CleaningExecutor.usageReason(finding, inventory: capture(), catalog: catalog)
             })
             let report = executor.execute(plan: plan.findings, scannedAt: plan.scannedAt, preferences: state.preferences) { message in diagnostics(Localization.text(message, language: language)) }
             state.apply(report); try store.save(state)

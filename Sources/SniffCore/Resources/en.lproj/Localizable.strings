@@ -447,3 +447,17 @@
 "Use either --quick or --worktrees, not both." = "Use either --quick or --worktrees, not both.";
 "Scan only Git worktrees; never removes files." = "Scan only Git worktrees; never removes files.";
 "Metadado local: {0}" = "Local metadata: {0}";
+
+// Rust build artifacts
+"Não foi possível conferir todos os subprojetos Rust. Escolha uma pasta de projeto mais específica." = "Some Rust subprojects could not be checked. Choose a more specific project folder.";
+"A descoberta de subprojetos Rust atingiu o limite de pastas. Escolha raízes mais específicas para cobrir o restante." = "Rust subproject discovery reached its folder limit. Choose more specific roots to cover the rest.";
+"Não foi possível conferir os perfis Rust. Conteúdo preservado." = "Rust build profiles could not be checked. Contents preserved.";
+"Inclui dependências compiladas, cache incremental e saída de build scripts." = "Includes compiled dependencies, incremental cache and build script output.";
+"Perfis release, fontes, Cargo.lock e toolchains são preservados." = "Release profiles, source files, Cargo.lock and toolchains are preserved.";
+"A próxima compilação debug terá que reconstruir estes arquivos." = "The next debug build will need to rebuild these files.";
+"Artefatos de compilação Rust sem uso visível. Selecione manualmente para limpar." = "Rust build artifacts with no visible usage. Select manually to clean.";
+"A pasta não corresponde a um perfil debug reconhecido do Cargo dentro das raízes escolhidas. Preservada." = "This folder is not a recognized Cargo debug profile within the selected roots. Preserved.";
+"Há fontes, dados locais, credenciais ou links nesta pasta de compilação. Conteúdo preservado." = "This build folder contains source files, local data, credentials or links. Contents preserved.";
+"O Git não confirmou que estes artefatos são ignorados e não rastreados. Conteúdo preservado." = "Git could not confirm that these artifacts are ignored and untracked. Contents preserved.";
+"Perfil Rust não reconhecido. Item preservado." = "Unrecognized Rust profile. Item preserved.";
+"Worktrees exigem análise e seleção manual. Docker e clones de assinatura ficam apenas para inspeção. O Sniff encontra target/debug do Rust também em subprojetos e preserva os perfis release. Compilações SwiftPM usam .build." = "Worktrees require a scan and manual selection. Docker and signing clones remain inspection-only. Sniff finds Rust target/debug folders in subprojects too and preserves release profiles. SwiftPM builds use .build.";

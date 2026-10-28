@@ -33,6 +33,20 @@ sniff clean --plan ./cleanup-plan.json
 
 Scanning never removes files. Without `--quick`, scans also inspect registered project folders, worktrees, Docker and other manual categories. `list` reads the last saved scan. Without filters, `plan` selects only enabled categories of caches that tools can recreate. Use repeated `--category` options or repeated `--path` options for exact paths; the two filters cannot be mixed.
 
+### Rust build artifacts
+
+A full scan finds `target/debug` even below a Git root, such as `SimpleMail/linux/target/debug`, plus `target/<triple>/debug`. Review them with `sniff list --category build`. Builds require manual selection and are never included in the recommended or scheduled cleanup.
+
+```sh
+sniff scan
+sniff list --category build
+sniff config --enable build
+sniff plan --path /absolute/project/linux/target/debug --output ./rust-debug-plan.json
+sniff clean --plan ./rust-debug-plan.json
+```
+
+Use the exact path returned by the scan. Sniff preserves release profiles, source files, lockfiles and toolchains, and refuses active builds, local data or tracked artifacts. Custom target/build directories configured outside the standard layout are not resolved.
+
 ### Worktrees
 
 ```sh

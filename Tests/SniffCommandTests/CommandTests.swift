@@ -53,6 +53,44 @@ struct CommandFixture {
     #expect(result.status == 4 && FileManager.default.fileExists(atPath: cache.path))
 }
 
+@Test func rustCLIReviewAndCleanupRecheckUsageAndPreserveRelease() throws {
+    let fixture = try CommandFixture(); defer { fixture.dispose() }
+    let repository = fixture.home.appendingPathComponent("Code/Sano").path
+    _ = try fixture.make("Code/Sano/.gitignore", content: "target/\n")
+    _ = try fixture.make("Code/Sano/linux/Cargo.toml", content: "[package]\nname='fixture'\nversion='0.1.0'\n")
+    let source = try fixture.make("Code/Sano/linux/src/main.rs", content: "fn main() {}")
+    let release = try fixture.make("Code/Sano/linux/target/release/fixture")
+    let debug = try fixture.make("Code/Sano/linux/target/debug/deps/libfixture.rlib")
+    _ = try fixture.make("Code/Sano/linux/target/debug/.fingerprint/fixture/lib-fixture.json", content: "{}")
+    #expect(Command.run("/usr/bin/git", ["init", repository]).status == 0)
+    var idle = ProcessInventory(); idle.complete = true
+    var state = PersistedState(); state.preferences.projectRoots = [fixture.home.appendingPathComponent("Code").path]
+    var notices: [String] = []
+    let projects = ProjectInspector.discover(roots: state.preferences.projectRoots, notices: &notices)
+    var scan = ScanSnapshot()
+    scan.findings = try ProjectInspector.inspect(repositories: projects, preferences: state.preferences, processes: idle, catalog: fixture.catalog, progress: { _ in })
+    let item = try #require(scan.findings.first { $0.ruleID == "rust-debug" })
+    #expect(item.state == .ready && !state.preferences.enabledCategories.contains(.build))
+    state.lastScan = scan; try fixture.store.save(state)
+    let list = try fixture.runner.run(fixture.request(["list", "--category", "build", "--json"]))
+    let listed = try #require(JSONSerialization.jsonObject(with: Data(list.output.utf8)) as? [String: Any])
+    let listedItems = try #require(listed["items"] as? [[String: Any]])
+    #expect(listedItems.contains { $0["path"] as? String == item.path && $0["state"] as? String == "ready" })
+    _ = try fixture.runner.run(fixture.request(["config", "--enable", "build"]))
+    let plan = fixture.root.appendingPathComponent("rust-debug-plan.json")
+    _ = try fixture.runner.run(fixture.request(["plan", "--path", item.path, "--output", plan.path]))
+    let active = CLIRunner(environment: CLIEnvironment(catalog: fixture.catalog, store: fixture.store, captureProcesses: {
+        var value = ProcessInventory(); value.complete = true; value.commands = ["cargo run"]
+        return value
+    }))
+    let blocked = try active.run(fixture.request(["clean", "--plan", plan.path, "--yes", "--json"]))
+    #expect(blocked.status == 4 && FileManager.default.fileExists(atPath: debug.path))
+    let cleaned = try fixture.runner.run(fixture.request(["clean", "--plan", plan.path, "--yes", "--json"]))
+    #expect(cleaned.status == 0 && !FileManager.default.fileExists(atPath: debug.path))
+    #expect(FileManager.default.fileExists(atPath: release.path))
+    #expect(FileManager.default.fileExists(atPath: source.path))
+}
+
 @Test func parserRejectsAmbiguousAndDestructiveShortcuts() throws {
     #expect(throws: (any Error).self) { try CLIRequest.parse(["clean", "--yes"]) }
     #expect(throws: (any Error).self) { try CLIRequest.parse(["plan", "--path", "/tmp/a", "--category", "npm"]) }

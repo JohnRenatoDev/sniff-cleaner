@@ -23,7 +23,8 @@ Sniff recognizes specific cache and temporary-file locations. These can be used 
 | --- | --- |
 | Package and build caches | npm, pnpm, uv, Bun, pip, node-gyp, Go, TypeScript, SwiftPM, Homebrew, NuGet, Cargo and Gradle caches. Supported categories can be scheduled. |
 | Agent leftovers | Old Codex runtime installation folders, recognized updater caches and selected log directories. Logs require manual review. |
-| Additional manual cleanup | Old npx environments, Rust `target` and Swift `.build` folders in project roots you choose, and the recognized Claude VM image. MCP environments in npx are preserved. |
+| Rust build artifacts | Finds `target/debug` in projects and nested ports, including `target/<triple>/debug`. Reports compiled dependencies, incremental cache and build script output for manual cleanup. Release profiles and toolchains are preserved. |
+| Additional manual cleanup | Old npx environments, Swift `.build` folders in project roots you choose, and the recognized Claude VM image. MCP environments in npx are preserved. |
 | Git worktrees | Finds registered worktrees and checks visible usage, local changes, ignored files and pending commits. Old, clean copies with published and integrated commits can be selected for manual cleanup. |
 | Inspection only | Docker/OrbStack storage and macOS code signing copies. Sniff reports these without deleting them. |
 

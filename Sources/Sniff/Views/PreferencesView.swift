@@ -73,7 +73,7 @@ struct PreferencesView: View {
                 Text(L("Se algum arquivo foi modificado dentro desse prazo, o Sniff preserva o item inteiro. Caches comuns podem ser recriados e não dependem desse prazo.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(L("Limites desta versão")) {
-                Text(L("Worktrees exigem análise e seleção manual. Docker e clones de assinatura ficam apenas para inspeção. Nos projetos, o Sniff reconhece as compilações target do Rust e .build do SwiftPM."))
+                Text(L("Worktrees exigem análise e seleção manual. Docker e clones de assinatura ficam apenas para inspeção. O Sniff encontra target/debug do Rust também em subprojetos e preserva os perfis release. Compilações SwiftPM usam .build."))
                 Text(L("O Sniff limpa arquivos deixados pelas ferramentas. Isso não corrige vazamento de processos, concorrência do Codex ou kernel panic.")).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped)

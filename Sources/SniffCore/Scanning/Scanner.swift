@@ -40,7 +40,7 @@ public struct Scanner: Sendable {
         }
         if deep || worktreesOnly {
             progress("Conferindo projetos e worktrees…")
-            let repositories = ProjectInspector.discover(roots: preferences.projectRoots + [catalog.home + "/.codex/worktrees", catalog.home + "/.claude/worktrees"], notices: &snapshot.notices)
+            let repositories = ProjectInspector.discover(roots: preferences.projectRoots + [catalog.home + "/.codex/worktrees", catalog.home + "/.claude/worktrees"], includeNestedCargo: !worktreesOnly, notices: &snapshot.notices)
             snapshot.findings += try ProjectInspector.inspect(repositories: repositories, preferences: preferences, processes: processes, catalog: catalog, worktreesOnly: worktreesOnly, progress: progress)
             if !worktreesOnly {
                 progress("Conferindo Docker / OrbStack…")

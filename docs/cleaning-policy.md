@@ -25,11 +25,22 @@ A remoção usa descritores de diretório, `openat(O_NOFOLLOW)`, `fstatat` e `un
 | Codex temporário | Apenas `codex-runtime-install-*` antigos | Manual / automática |
 | Instaladores | Caches de atualização reconhecidos do Codex, Granola, Bitwarden e Antigravity | Manual / automática; retenção |
 | Logs | Apenas `.log` nos diretórios de logs reconhecidos | Manual; retenção própria |
-| Builds | `target` com Cargo.toml e `.build` com Package.swift em raízes escolhidas | Manual; ferramentas de build ativas preservam |
+| Builds Rust | `target/debug` e `target/<triple>/debug`, com `Cargo.toml`, `deps` e `.fingerprint`, inclusive em subprojetos dentro das raízes escolhidas | Manual; perfis release e toolchains preservados |
+| Builds Swift | `.build` com Package.swift em raízes escolhidas | Manual; ferramentas de build ativas preservam |
 | VM Claude | Somente `vm_bundles/claudevm.bundle/rootfs.img` | Manual; reconstrução avisada; Claude ativo preserva |
 | Worktrees | Registros reais de `git worktree list`, raízes de projetos/Codex/Claude | Manual; apenas antigas, sem uso visível, alterações, dados locais ou commits pendentes |
 | Docker / OrbStack | `system df`, containers, volumes e imagens sem tag | Somente inspeção; não inicia o engine |
 | Clones de assinatura | `X/*.code_sign_clone/code_sign_clone.*` do usuário | Somente inspeção; versão e uso por inode |
+
+### Artefatos Rust
+
+A análise completa procura projetos Cargo também abaixo de uma raiz Git, por exemplo `SimpleMail/linux/Cargo.toml`. Cada perfil debug reconhecido aparece como um item em **Compilações**, incluindo `deps`, `incremental` e a saída dos build scripts. O Sniff não executa Cargo, `build.rs`, hooks ou filtros do projeto para descobrir esses arquivos.
+
+A remoção exige seleção manual. O Sniff preserva o item quando há ferramentas Rust ativas, arquivos ou diretórios do projeto abertos, hardlinks em uso, inventário de processos incompleto, fontes fora da saída gerada de build scripts, configurações, bancos, credenciais, symlinks ou arquivos especiais. Em projetos Git, os artefatos também precisam estar ignorados e sem arquivos rastreados. A verificação é repetida após a conferência de uso e antes da remoção. Planos antigos para remover `target` inteiro são recusados.
+
+`target/release`, perfis personalizados, fontes, `Cargo.lock`, toolchains e o diretório `target` em si não entram nessa regra. Pastas personalizadas por `CARGO_TARGET_DIR`, `--target-dir`, `build.target-dir` ou `build.build-dir` não são resolvidas nesta versão; não se presume que uma pasta arbitrária seja descartável. A próxima compilação debug reconstruirá os artefatos removidos. A análise rápida e o agendamento não percorrem projetos Rust.
+
+[Layout dos artefatos: Cargo Book](https://doc.rust-lang.org/cargo/reference/build-cache.html).
 
 ### Worktrees
 
